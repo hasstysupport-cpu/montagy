@@ -203,7 +203,7 @@ class AgentTools {
         return 'Trimmed timeline to $start..$end s.';
 
       case 'set_speed':
-        final sp = ((args['speed'] as num?)?.toDouble()).clamp(0.25, 4.0);
+        final sp = ((args['speed'] as num?)?.toDouble() ?? 1.0).clamp(0.25, 4.0);
         for (final c in p.clips) {
           c.speed = sp.toDouble();
         }

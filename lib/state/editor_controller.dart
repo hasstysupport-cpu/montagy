@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/audio_track.dart';
 import '../models/caption.dart';
 import '../models/overlay_item.dart';
 import '../models/project.dart';

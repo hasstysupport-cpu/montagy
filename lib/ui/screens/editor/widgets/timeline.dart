@@ -275,7 +275,7 @@ class _FilmstripState extends State<_Filmstrip> {
         final t = (i + 0.5) / count * widget.length;
         final path = await VideoThumbnail.thumbnailFile(
           video: widget.clipPath,
-          thumbnailFormat: ThumbnailFormat.JPEG,
+          imageFormat: ImageFormat.JPEG,
           quality: 25,
           timeMs: (t * 1000).round(),
         );

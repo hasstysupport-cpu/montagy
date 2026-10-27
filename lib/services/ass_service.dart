@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show Color;
 
 import '../models/caption.dart';
 import '../models/caption_style.dart';

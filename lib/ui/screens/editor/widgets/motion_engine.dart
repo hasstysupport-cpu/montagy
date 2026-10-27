@@ -46,7 +46,7 @@ class _MotionElementView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final anim = _Animated(element: element, local: local, child: _content());
+    final anim = _Animated(element: element, local: local, videoHeightPx: videoHeightPx, child: _content());
     return Positioned(
       left: 0, right: 0, top: 0, bottom: 0,
       child: Align(
@@ -124,8 +124,9 @@ class _MotionElementView extends StatelessWidget {
 class _Animated extends StatefulWidget {
   final MotionElement element;
   final double local;
+  final double videoHeightPx;
   final Widget child;
-  const _Animated({required this.element, required this.local, required this.child});
+  const _Animated({required this.element, required this.local, required this.videoHeightPx, required this.child});
 
   @override
   State<_Animated> createState() => _AnimatedState();
@@ -165,13 +166,13 @@ class _AnimatedState extends State<_Animated> with SingleTickerProviderStateMixi
       case 'slideUp':
         final p = (d / 0.4).clamp(0.0, 1.0);
         w = Transform.translate(
-            offset: Offset(0, (1 - Curves.easeOutCubic.transform(p)) * videoHeightPx * 0.12),
+            offset: Offset(0, (1 - Curves.easeOutCubic.transform(p)) * widget.videoHeightPx * 0.12),
             child: Opacity(opacity: p, child: w));
         break;
       case 'slideDown':
         final p = (d / 0.4).clamp(0.0, 1.0);
         w = Transform.translate(
-            offset: Offset(0, -(1 - Curves.easeOutCubic.transform(p)) * videoHeightPx * 0.12),
+            offset: Offset(0, -(1 - Curves.easeOutCubic.transform(p)) * widget.videoHeightPx * 0.12),
             child: Opacity(opacity: p, child: w));
         break;
       case 'typewriter':

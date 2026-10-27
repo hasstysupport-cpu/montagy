@@ -95,7 +95,7 @@ class _EditorShell extends ConsumerWidget {
               IconButton(icon: const Icon(Icons.check), tooltip: context.tr('save'), onPressed: ctrl.save),
             IconButton(icon: const Icon(Icons.undo), onPressed: ctrl.undo),
             IconButton(icon: const Icon(Icons.redo), onPressed: ctrl.redo),
-            _ExportButton(projectId: st.project.id),
+            _ExportButton(st.project.id),
           ],
         ),
         body: Column(

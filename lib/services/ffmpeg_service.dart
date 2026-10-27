@@ -43,13 +43,13 @@ class FfmpegService {
     var hasAudio = false;
     for (final s in streams) {
       if (s.getType() == 'video') {
-        w = int.tryParse(s.getWidth() ?? '') ?? 0;
-        h = int.tryParse(s.getHeight() ?? '') ?? 0;
+        w = int.tryParse('${s.getWidth()}') ?? 0;
+        h = int.tryParse('${s.getHeight()}') ?? 0;
       } else if (s.getType() == 'audio') {
         hasAudio = true;
       }
     }
-    final dur = double.tryParse(info.getDuration() ?? '') ?? 0;
+    final dur = double.tryParse('${info.getDuration()}') ?? 0;
     return MediaInfo(duration: dur, width: w == 0 ? 1920 : w, height: h == 0 ? 1080 : h, hasAudio: hasAudio);
   }
 

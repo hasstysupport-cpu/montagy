@@ -7,7 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../services/ai/ai_facade.dart';
 import '../../../services/storage_service.dart';
 import '../../../state/settings_provider.dart';
-import 'editor/editor_screen.dart';
+import '../editor/editor_screen.dart';
 
 /// AI Studio tab: project picker → auto captions / motion / agent entry.
 class AiStudioScreen extends ConsumerStatefulWidget {

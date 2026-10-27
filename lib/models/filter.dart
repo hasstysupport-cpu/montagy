@@ -16,24 +16,24 @@ class FilterPreset {
 class Filters {
   Filters._();
   static const original = FilterPreset('original', '', Color(0xFF555555), Color(0xFF888888));
-  static final vivid = FilterPreset('vivid',
+  static const vivid = FilterPreset('vivid',
       'eq=saturation={i}:contrast=1.0+0.15*{i}', const Color(0xFFFF5F6D), const Color(0xFFFFC371));
-  static final cinematic = FilterPreset('cinematic',
+  static const cinematic = FilterPreset('cinematic',
       'eq=contrast=1.0+0.18*{i}:saturation=1.0-0.1*{i}:colorbalance=rs=-0.06*{i}:bs=0.08*{i}',
       const Color(0xFF0F2027), const Color(0xFF2C5364));
-  static final bw = FilterPreset('bw', 'hue=s=0', const Color(0xFF111111), const Color(0xFFEEEEEE));
-  static final vintage = FilterPreset('vintage',
+  static const bw = FilterPreset('bw', 'hue=s=0', const Color(0xFF111111), const Color(0xFFEEEEEE));
+  static const vintage = FilterPreset('vintage',
       'eq=saturation=1.0-0.25*{i}:gamma=1.0+0.08*{i},colorbalance=rs=0.08*{i}:gs=0.03*{i}',
       const Color(0xFFC79081), const Color(0xFFDFA579));
-  static final cool = FilterPreset('cool',
+  static const cool = FilterPreset('cool',
       'colorbalance=bs=0.15*{i}:rs=-0.06*{i}', const Color(0xFF2193B0), const Color(0xFF6DD5ED));
-  static final warm = FilterPreset('warm',
+  static const warm = FilterPreset('warm',
       'colorbalance=rs=0.15*{i}:bs=-0.06*{i}', const Color(0xFFF7797D), const Color(0xFFC471ED));
-  static final fade = FilterPreset('fade',
+  static const fade = FilterPreset('fade',
       'eq=contrast=1.0-0.15*{i}:saturation=1.0-0.2*{i}', const Color(0xFFABB2B9), const Color(0xFFEAEAEA));
-  static final noir = FilterPreset('noir',
+  static const noir = FilterPreset('noir',
       'hue=s=0,eq=contrast=1.0+0.35*{i}:brightness=-0.03*{i}', const Color(0xFF000000), const Color(0xFF9E9E9E));
-  static final neonDream = FilterPreset('neondream',
+  static const neonDream = FilterPreset('neondream',
       'eq=saturation=1.0+0.5*{i}:contrast=1.0+0.1*{i},colorbalance=ms=0.12*{i}:bs=0.10*{i}',
       const Color(0xFFDA22FF), const Color(0xFF9733EE));
 

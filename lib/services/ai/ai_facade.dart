@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../state/settings_provider.dart';
 import '../../models/caption.dart';
+import '../../models/caption_style.dart';
 import '../ffmpeg_service.dart';
 import 'openrouter_service.dart';
 import 'transcription_service.dart';

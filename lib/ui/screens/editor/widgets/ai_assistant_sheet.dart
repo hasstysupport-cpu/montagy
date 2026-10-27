@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/i18n/strings.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../models/caption.dart';
 import '../../../../services/ai/ai_facade.dart';
 import '../../../../services/ai/agent_loop.dart';
 import '../../../../state/editor_controller.dart';
@@ -29,7 +30,7 @@ class AiAgentChat extends ConsumerStatefulWidget {
   ConsumerState<AiAgentChat> createState() => _AiAgentChatState();
 }
 
-class _AiAgentChatState extends State<AiAgentChat> {
+class _AiAgentChatState extends ConsumerState<AiAgentChat> {
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
@@ -225,7 +226,7 @@ class _AiAgentChatState extends State<AiAgentChat> {
     _scrollDown();
   }
 
-  Future<List<dynamic>> _runAutoCaptions() async {
+  Future<List<CaptionSegment>> _runAutoCaptions() async {
     final st = ref.read(editorProvider);
     final settings = ref.read(settingsProvider);
     final clip = st.project.clips.first;

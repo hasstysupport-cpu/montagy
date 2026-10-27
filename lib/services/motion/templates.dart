@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import '../../models/motion_scene.dart';
 
 /// Bundled motion templates — Flutter-native (no external deps), AI can also

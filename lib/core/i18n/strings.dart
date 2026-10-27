@@ -185,8 +185,8 @@ class S {
     'loading': 'بيحمّل...',
     'seconds': 'ثانية',
     'free_models_hint': 'الموديلات المجانية على OpenRouter ليها suffix :free',
-  },
-  'en': <String, String>{
+  };
+  static const en = <String, String>{
     'app_name': 'Montagy',
     'tagline': 'AI Video Editing & Caption Studio',
     'nav_projects': 'Projects',
@@ -352,15 +352,18 @@ class S {
     'loading': 'Loading...',
     'seconds': 'sec',
     'free_models_hint': 'Free OpenRouter models have a :free suffix',
-  },
-};
+  };
+}
 
 extension TrExt on BuildContext {
   String tr(String key) {
     final loc = Localizations.localeOf(this).languageCode;
-    return S[loc]?[key] ?? S['en']?[key] ?? key;
+    final m = loc == 'ar' ? S.ar : S.en;
+    return m[key] ?? S.en[key] ?? key;
   }
 }
 
-String trOf(String locale, String key) =>
-    S[locale]?[key] ?? S['en']?[key] ?? key;
+String trOf(String locale, String key) {
+  final m = locale == 'ar' ? S.ar : S.en;
+  return m[key] ?? S.en[key] ?? key;
+}
