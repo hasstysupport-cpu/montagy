@@ -136,7 +136,7 @@ lib/
 
 ## 🧩 المكتبات الأساسية
 
-- [`ffmpeg_kit_flutter_new_full_gpl`](https://pub.dev/packages/ffmpeg_kit_flutter_new_full_gpl) — فورك FFmpegKit الشغال (libass + fribidi + x264)
+- [`ffmpeg_kit_flutter_new_gpl`](https://pub.dev/packages/ffmpeg_kit_flutter_new_gpl) — فورك FFmpegKit الشغال (libass + fribidi + x264)
 - `video_player` — المعاينة
 - `flutter_riverpod` — إدارة الحالة
 - `video_thumbnail` — الـ filmstrip

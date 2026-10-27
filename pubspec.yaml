@@ -19,7 +19,7 @@ dependencies:
   # Video / media
   video_player: ^2.9.1
   video_thumbnail: ^0.5.3
-  ffmpeg_kit_flutter_new_full_gpl: ^2.6.0   # FFmpeg 7.1 fork (libass + fribidi + x264)
+  ffmpeg_kit_flutter_new_gpl: ^1.6.5       # FFmpegKit fork full-gpl build (libass + fribidi + x264)
   just_audio: ^0.9.40
 
   # Files & platform
