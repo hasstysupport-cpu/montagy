@@ -59,6 +59,19 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
+      # ffmpeg_kit_flutter_android's setup script points to a missing release
+      # asset (downloads a 9-byte "Not Found"). Pre-place the official Arthenica
+      # full-gpl LTS AAR (mirrored by sk3llo) so the plugin skips its download.
+      # Contains: libass + fribidi + x264 (verified), all 4 ABIs.
+      - name: Provide FFmpegKit Android AAR
+        run: |
+          PKG_DIR=$(ls -d /home/runner/.pub-cache/hosted/pub.dev/ffmpeg_kit_flutter_android-*/ | head -1)
+          echo "plugin dir: $PKG_DIR"
+          mkdir -p "$PKG_DIR/android/libs"
+          curl -fL --retry 3 -o "$PKG_DIR/android/libs/com.arthenica.ffmpegkit-flutter-7.0.aar" \
+            "https://github.com/sk3llo/ffmpeg_kit_flutter/releases/download/6.0.2/ffmpeg-kit-full-gpl-6.0.LTS.aar"
+          ls -lh "$PKG_DIR/android/libs/"
+
       - name: Build release APK
         run: flutter build apk --release
 
