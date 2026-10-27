@@ -61,6 +61,20 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
+      # Our custom signing config points at the debug keystore but AGP only
+      # auto-generates that for its built-in "debug" config — create it here.
+      - name: Ensure debug keystore exists
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          ls -la ~/.android/debug.keystore
+
       # ffmpeg_kit_flutter_android's setup script points to a missing release
       # asset (downloads a 9-byte "Not Found"). Pre-place the official Arthenica
       # full-gpl LTS AAR (mirrored by sk3llo) so the plugin skips its download.
@@ -87,8 +101,9 @@ jobs:
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk Montagy-v1.0.0.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Montagy-v1.0.0-arm64.apk
-          ls -lh Montagy-v1.0.0.apk Montagy-v1.0.0-arm64.apk
-          sha256sum Montagy-v1.0.0.apk Montagy-v1.0.0-arm64.apk | tee SHA256SUMS.txt
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Montagy-v1.0.0-armv7.apk
+          ls -lh Montagy-v1.0.0.apk Montagy-v1.0.0-arm64.apk Montagy-v1.0.0-armv7.apk
+          sha256sum Montagy-v1.0.0.apk Montagy-v1.0.0-arm64.apk Montagy-v1.0.0-armv7.apk | tee SHA256SUMS.txt
           {
             echo '### SHA-256 checksums'
             echo '```'
@@ -98,6 +113,14 @@ jobs:
             echo '⚠️ لو الملف اللي نزل عندك حجمه مختلف عن اللي فوق — التحميل اتقطع، نزّله تاني.'
           } > release_notes.md
 
+      - name: Verify APK signatures (diagnostic)
+        run: |
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
+          echo "== universal =="
+          $APKSIGNER verify --verbose build/app/outputs/flutter-apk/app-release.apk | head -8
+          echo "== arm64 =="
+          $APKSIGNER verify --verbose build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | head -8
+
       - name: Upload artifact (90 days)
         uses: actions/upload-artifact@v4
         with:
@@ -105,6 +128,7 @@ jobs:
           path: |
             Montagy-v1.0.0.apk
             Montagy-v1.0.0-arm64.apk
+            Montagy-v1.0.0-armv7.apk
             SHA256SUMS.txt
           retention-days: 90
 
@@ -119,12 +143,14 @@ jobs:
             📱 **Montagy v1.0.0** — AI video editor & caption studio (CapCut-style)
 
             - Built automatically by GitHub Actions from commit `${{ github.sha }}`
-            - **Montagy-v1.0.0-arm64.apk** ← لجميع الموبايلات الحديثة (صغير وأسرع تحميل) ✅
-            - Montagy-v1.0.0.apk — Universal (arm64 + armv7 + x86_64), FFmpeg full-gpl included
+            - **Montagy-v1.0.0-arm64.apk** ← لجميع الموبايلات الحديثة (2016+) ✅ حمّل ده
+            - Montagy-v1.0.0-armv7.apk — للأجهزة الأقدم 32-bit
+            - Montagy-v1.0.0.apk — Universal (كل المعالجات)
             - Install: download → open → allow "install unknown apps"
 
             ⚠️ Debug-signed build — for personal use / testing only.
           files: |
             Montagy-v1.0.0.apk
             Montagy-v1.0.0-arm64.apk
+            Montagy-v1.0.0-armv7.apk
           make_latest: true

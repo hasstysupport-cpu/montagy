@@ -38,10 +38,25 @@ android {
         multiDexEnabled = true
     }
 
+    signingConfigs {
+        // Same auto-generated debug keystore, but force BOTH v1 (JAR) and
+        // v2 signature schemes. AGP silently drops v1 when minSdk >= 24,
+        // and some Android devices/installers refuse v2-only APKs with
+        // "package appears to be invalid". Explicit v1 fixes sideloading.
+        montagy {
+            storeFile file("${System.getProperty('user.home')}/.android/debug.keystore")
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+            enableV1Signing true
+            enableV2Signing true
+        }
+    }
+
     buildTypes {
         release {
             // TODO: add your signing config for Play Store release
-            signingConfig = signingConfigs.debug
+            signingConfig = signingConfigs.montagy
             minifyEnabled = false
             shrinkResources = false
         }
