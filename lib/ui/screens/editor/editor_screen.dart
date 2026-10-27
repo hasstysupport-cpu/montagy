@@ -17,6 +17,8 @@ import 'panels/speed_panel.dart';
 import 'panels/audio_panel.dart';
 import 'panels/transitions_panel.dart';
 import 'panels/motion_panel.dart';
+import 'panels/tools_panel.dart';
+import 'panels/adjust_panel.dart';
 import 'widgets/ai_assistant_sheet.dart';
 import 'export/export_screen.dart';
 
@@ -137,6 +139,8 @@ class _EditorShell extends ConsumerWidget {
       'audio' => AudioPanel(),
       'transitions' => TransitionsPanel(),
       'motion' => MotionPanel(),
+      'tools' => const ToolsPanel(),
+      'adjust' => const AdjustPanel(),
       _ => const SizedBox.shrink(),
     };
   }
@@ -182,11 +186,13 @@ class _Toolbar extends ConsumerWidget {
     final st = ref.watch(editorProvider);
     final ctrl = ref.read(editorProvider.notifier);
     final items = [
+      ('tools', Icons.crop_rotate, context.tr('tool_tools')),
+      ('adjust', Icons.tune, context.tr('tool_adjust')),
+      ('filters', Icons.filter_vintage, context.tr('tool_filters')),
       ('captions', Icons.closed_caption, context.tr('tool_captions')),
       ('styles', Icons.style, context.tr('style_gallery')),
       ('text', Icons.text_fields, context.tr('tool_text')),
       ('stickers', Icons.emoji_emotions_outlined, context.tr('tool_stickers')),
-      ('filters', Icons.filter_vintage, context.tr('tool_filters')),
       ('speed', Icons.speed, context.tr('tool_speed')),
       ('audio', Icons.music_note, context.tr('tool_audio')),
       ('transitions', Icons.swap_horiz, context.tr('tool_transitions')),

@@ -7,6 +7,7 @@ import '../models/audio_track.dart';
 import '../models/caption.dart';
 import '../models/overlay_item.dart';
 import '../models/project.dart';
+import '../models/transition.dart';
 import '../services/storage_service.dart';
 
 /// Live editing session state (project + playhead + selection + undo).
@@ -161,6 +162,51 @@ class EditorController extends StateNotifier<EditorState> {
     mutate((p) {
       fn(p.clips[index]);
     }, snapshot: snapshot);
+  }
+
+  /// Index of the clip under the playhead (-1 when empty timeline).
+  int clipIndexAtPlayhead() {
+    final t = state.playhead;
+    final p = state.project;
+    var cursor = 0.0;
+    for (var i = 0; i < p.clips.length; i++) {
+      final len = p.clips[i].timelineLength;
+      if (t < cursor + len || i == p.clips.length - 1) {
+        if (t >= cursor - 0.001) return i;
+      }
+      cursor += len;
+    }
+    return p.clips.isEmpty ? -1 : 0;
+  }
+
+  /// Split the clip at [index] into segments at in-file time [marks]
+  /// (used by silence/scene auto-cut).
+  void autoSplitClip(int index, List<double> marks) {
+    if (marks.isEmpty) return;
+    mutate((p) {
+      final c = p.clips[index];
+      final bounds = <double>[c.trimStart, ...marks.where((m) => m > c.trimStart + 0.25 && m < c.trimEnd - 0.25), c.trimEnd];
+      bounds.sort();
+      final parts = <VideoClip>[];
+      for (var i = 0; i < bounds.length - 1; i++) {
+        parts.add(VideoClip(
+          id: i == 0 ? c.id : _uuid.v4(),
+          path: c.path,
+          name: c.name,
+          sourceDuration: c.sourceDuration,
+          trimStart: bounds[i],
+          trimEnd: bounds[i + 1],
+          speed: c.speed,
+          volume: c.volume,
+          filterId: c.filterId,
+          filterIntensity: c.filterIntensity,
+          transitionToNext: i == bounds.length - 2 ? c.transitionToNext : Transitions.none,
+        ));
+      }
+      p.clips
+        ..removeAt(index)
+        ..insertAll(index, parts);
+    });
   }
 
   // ---------------- Captions ----------------

@@ -29,10 +29,58 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   String? _outPath;
   String? _error;
 
+  // v1.1 export ladder
+  int _resIdx = 1; // 0=auto, 1=1080p, 2=720p, 3=2K, 4=4K
+  static const _resolutions = [
+    (0, 'Auto'),
+    (1080, '1080p'),
+    (720, '720p'),
+    (1440, '2K'),
+    (2160, '4K'),
+  ];
+  int _fps = 30;
   ExportQuality _quality = ExportQuality.high;
-  int _resIdx = 1; // 0=1080, 1=720, 2=480
+  double _mbps = 0; // 0 = use quality CRF, else custom bitrate
   bool _burnCaptions = true;
-  static const _resolutions = [(1920, 1080), (1280, 720), (854, 480)];
+  bool _bgBlur = false;
+
+  (int, int)? _sourceDims;
+
+  @override
+  void initState() {
+    super.initState();
+    _probeSource();
+  }
+
+  Future<void> _probeSource() async {
+    try {
+      final projects = await StorageService.instance.listProjects();
+      final project = projects.firstWhere((p) => p.id == widget.projectId);
+      if (project.clips.isEmpty) return;
+      final info = await FfmpegService.instance.probe(project.clips.first.path);
+      if (mounted) setState(() => _sourceDims = (info.width, info.height));
+    } catch (_) {}
+  }
+
+  (int, int) _targetDims() {
+    final sel = _resolutions[_resIdx].$1;
+    final src = _sourceDims ?? (1920, 1080);
+    if (sel == 0) {
+      // auto — keep source, even dims, capped to 4K
+      final scale = (2160 / (src.$1 > src.$2 ? src.$1 : src.$2)).clamp(0.0, 1.0);
+      return (((src.$1 * scale) ~/ 2) * 2, ((src.$2 * scale) ~/ 2) * 2);
+    }
+    // height-based ladder, keep source aspect
+    final isPortrait = src.$2 > src.$1;
+    if (isPortrait) {
+      final w = sel;
+      final h = ((w * src.$2 / src.$1) ~/ 2) * 2;
+      return (w, h);
+    }
+    final h = sel;
+    final w = ((h * src.$1 / src.$2) ~/ 2) * 2;
+    return (w, h);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,50 +93,81 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
     );
   }
 
+  Widget _sectionLabel(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, top: 4),
+        child: Text(t, style: GoogleFonts.cairo(fontWeight: FontWeight.w700, fontSize: 13.5)),
+      );
+
   Widget _optionsView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final dims = _targetDims();
+    return ListView(
       children: [
-        Text(context.tr('resolution'), style: GoogleFonts.cairo(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        Row(
+        _sectionLabel(context.tr('resolution')),
+        Wrap(
+          spacing: 8, runSpacing: 8,
           children: [
-            for (var i = 0; i < 3; i++)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: ChoiceChip(
-                    label: Text('${_resolutions[i].$1}p'),
-                    selected: _resIdx == i,
-                    onSelected: (_) => setState(() => _resIdx = i),
-                  ),
-                ),
+            for (var i = 0; i < _resolutions.length; i++)
+              ChoiceChip(
+                label: Text(_resolutions[i].$2),
+                selected: _resIdx == i,
+                onSelected: (_) => setState(() => _resIdx = i),
+              ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('${dims.$1} × ${dims.$2} px',
+              style: GoogleFonts.cairo(fontSize: 11, color: AppColors.textDim)),
+        ),
+        const SizedBox(height: 14),
+        _sectionLabel('FPS'),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final f in [24, 30, 60])
+              ChoiceChip(
+                label: Text('$f'),
+                selected: _fps == f,
+                onSelected: (_) => setState(() => _fps = f),
               ),
           ],
         ),
         const SizedBox(height: 14),
-        Text(context.tr('quality'), style: GoogleFonts.cairo(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        Row(
+        _sectionLabel(context.tr('quality')),
+        Wrap(
+          spacing: 8,
           children: [
             for (final q in ExportQuality.values)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: ChoiceChip(
-                    label: Text(switch (q) {
-                      ExportQuality.high => context.tr('high'),
-                      ExportQuality.medium => context.tr('medium'),
-                      ExportQuality.low => context.tr('low'),
-                    }),
-                    selected: _quality == q,
-                    onSelected: (_) => setState(() => _quality = q),
-                  ),
-                ),
+              ChoiceChip(
+                label: Text(switch (q) {
+                  ExportQuality.high => context.tr('high'),
+                  ExportQuality.medium => context.tr('medium'),
+                  ExportQuality.low => context.tr('low'),
+                }),
+                selected: _quality == q && _mbps == 0,
+                onSelected: (_) => setState(() {
+                  _quality = q;
+                  _mbps = 0;
+                }),
               ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
+        Row(children: [
+          Text(context.tr('custom_bitrate'),
+              style: GoogleFonts.cairo(fontSize: 11.5, color: AppColors.textDim)),
+          const Spacer(),
+          Text(_mbps == 0 ? 'CRF' : '${_mbps.toStringAsFixed(1)} Mbps',
+              style: GoogleFonts.cairo(
+                  fontSize: 11.5, color: _mbps == 0 ? AppColors.textDim : AppColors.primary)),
+        ]),
+        Slider(
+          value: _mbps,
+          min: 0, max: 40,
+          divisions: 80,
+          activeColor: _mbps == 0 ? AppColors.border : AppColors.primary,
+          onChanged: (v) => setState(() => _mbps = v == 0 ? 0 : v),
+        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(context.tr('burn_captions'), style: GoogleFonts.cairo(fontSize: 14)),
@@ -98,7 +177,16 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           activeColor: AppColors.primary,
           onChanged: (v) => setState(() => _burnCaptions = v),
         ),
-        const Spacer(),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(context.tr('bg_blur'), style: GoogleFonts.cairo(fontSize: 14)),
+          subtitle: Text(context.tr('bg_blur_hint'),
+              style: GoogleFonts.cairo(fontSize: 11.5, color: AppColors.textDim)),
+          value: _bgBlur,
+          activeColor: AppColors.primary,
+          onChanged: (v) => setState(() => _bgBlur = v),
+        ),
+        const SizedBox(height: 10),
         if (_busy) ...[
           Text('${context.tr('exporting')} ${(_progress * 100).toStringAsFixed(0)}%',
               style: GoogleFonts.cairo(fontSize: 13)),
@@ -191,7 +279,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       final outPath =
           '${outDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
 
-      final res = _resolutions[_resIdx];
+      final dims = _targetDims();
       String? assPath;
       if (_burnCaptions && project.captions.isNotEmpty) {
         final tmp = await StorageService.instance.tmpDir();
@@ -200,8 +288,8 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           dir: tmp.path,
           captions: project.captions,
           stylesById: styles,
-          videoW: res.$1,
-          videoH: res.$2,
+          videoW: dims.$1,
+          videoH: dims.$2,
         );
       }
 
@@ -220,10 +308,14 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       await FfmpegService.instance.exportProject(
         clipSpecs: _buildClipSpecs(project),
         outPath: outPath,
-        targetW: res.$1,
-        targetH: res.$2,
+        settings: ExportSettings(
+          width: dims.$1,
+          height: dims.$2,
+          fps: _fps,
+          quality: _quality,
+          customMbps: _mbps == 0 ? null : _mbps,
+        ),
         totalDuration: project.totalDuration,
-        quality: _quality,
         assPath: assPath,
         musicSpecs: musicSpecs,
         onProgress: (p, stage) {
@@ -261,6 +353,30 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         'mute': c.volume == 0,
         'filter': filter,
         'transition': c.transitionToNext.toJson(),
+        // v1.1 tools
+        'rotate': c.rotate,
+        'mirror': c.mirror,
+        'flipV': c.flipV,
+        'reverse': c.reverse,
+        'freezeDur': c.freezeDur,
+        'cropAspect': c.cropAspect,
+        'kenBurns': c.kenBurns,
+        'chromaEnabled': c.chromaEnabled,
+        'chromaColor': c.chromaColor,
+        'chromaSimilarity': c.chromaSimilarity,
+        'chromaBlend': c.chromaBlend,
+        'brightness': c.brightness,
+        'contrast': c.contrast,
+        'saturation': c.saturation,
+        'warmth': c.warmth,
+        'sharpen': c.sharpen,
+        'vignette': c.vignette,
+        'grain': c.grain,
+        'pitch': c.pitch,
+        'bass': c.bass,
+        'treble': c.treble,
+        'echo': c.echo,
+        'bgBlur': _bgBlur,
       });
     }
     return specs;

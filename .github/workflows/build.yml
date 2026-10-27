@@ -99,11 +99,11 @@ jobs:
 
       - name: Prepare APKs + checksums
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk Montagy-v1.0.0.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Montagy-v1.0.0-arm64.apk
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Montagy-v1.0.0-armv7.apk
-          ls -lh Montagy-v1.0.0.apk Montagy-v1.0.0-arm64.apk Montagy-v1.0.0-armv7.apk
-          sha256sum Montagy-v1.0.0.apk Montagy-v1.0.0-arm64.apk Montagy-v1.0.0-armv7.apk | tee SHA256SUMS.txt
+          cp build/app/outputs/flutter-apk/app-release.apk Montagy-v1.1.0.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Montagy-v1.1.0-arm64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Montagy-v1.1.0-armv7.apk
+          ls -lh Montagy-v1.1.0.apk Montagy-v1.1.0-arm64.apk Montagy-v1.1.0-armv7.apk
+          sha256sum Montagy-v1.1.0.apk Montagy-v1.1.0-arm64.apk Montagy-v1.1.0-armv7.apk | tee SHA256SUMS.txt
           {
             echo '### SHA-256 checksums'
             echo '```'
@@ -126,9 +126,9 @@ jobs:
         with:
           name: Montagy-APK
           path: |
-            Montagy-v1.0.0.apk
-            Montagy-v1.0.0-arm64.apk
-            Montagy-v1.0.0-armv7.apk
+            Montagy-v1.1.0.apk
+            Montagy-v1.1.0-arm64.apk
+            Montagy-v1.1.0-armv7.apk
             SHA256SUMS.txt
           retention-days: 90
 
@@ -140,17 +140,17 @@ jobs:
           body_path: release_notes.md
           append_body: true
           body: |
-            📱 **Montagy v1.0.0** — AI video editor & caption studio (CapCut-style)
+            📱 **Montagy v1.1.0** — AI video editor & caption studio (CapCut-style)
 
             - Built automatically by GitHub Actions from commit `${{ github.sha }}`
-            - **Montagy-v1.0.0-arm64.apk** ← لجميع الموبايلات الحديثة (2016+) ✅ حمّل ده
-            - Montagy-v1.0.0-armv7.apk — للأجهزة الأقدم 32-bit
-            - Montagy-v1.0.0.apk — Universal (كل المعالجات)
+            - **Montagy-v1.1.0-arm64.apk** ← لجميع الموبايلات الحديثة (2016+) ✅ حمّل ده
+            - Montagy-v1.1.0-armv7.apk — للأجهزة الأقدم 32-bit
+            - Montagy-v1.1.0.apk — Universal (كل المعالجات)
             - Install: download → open → allow "install unknown apps"
 
             ⚠️ Debug-signed build — for personal use / testing only.
           files: |
-            Montagy-v1.0.0.apk
-            Montagy-v1.0.0-arm64.apk
-            Montagy-v1.0.0-armv7.apk
+            Montagy-v1.1.0.apk
+            Montagy-v1.1.0-arm64.apk
+            Montagy-v1.1.0-armv7.apk
           make_latest: true
