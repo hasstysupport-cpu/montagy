@@ -15,6 +15,7 @@ cp android_patch/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
 cp android_patch/app_build.gradle android/app/build.gradle
 mkdir -p android/app/src/main/res/xml
 cp android_patch/file_paths.xml android/app/src/main/res/xml/file_paths.xml
+cp -r android_patch/res/. android/app/src/main/res/
 mkdir -p android/app/src/main/kotlin/com/montagy/app
 cat > android/app/src/main/kotlin/com/montagy/app/MainActivity.kt <<'EOF'
 package com.montagy.app

@@ -1,7 +1,7 @@
 name: montagy
-description: "Montagy — مونتاجي: AI video editor & caption studio (CapCut-style, open source)."
+description: "Montagy — مونتاجي: استوديو مونتاج فيديو احترافي (قوة CapCut وبساطة InShot في تطبيق واحد)."
 publish_to: "none"
-version: 1.1.0+2
+version: 2.0.0+8
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -12,33 +12,23 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # State & routing
-  flutter_riverpod: ^2.5.1
-  go_router: ^14.2.0
-
-  # Video / media
-  video_player: ^2.9.1
+  # Media playback & processing
+  video_player: ^2.9.2
   video_thumbnail: ^0.5.3
-  ffmpeg_kit_flutter_new_gpl: ^1.6.5       # FFmpegKit fork full-gpl build (libass + fribidi + x264)
+  ffmpeg_kit_flutter_new_gpl: ^1.6.5   # full-gpl build (x264 + fribidi + freetype)
   just_audio: ^0.9.40
 
   # Files & platform
   file_picker: ^8.1.2
-  image_picker: ^1.1.2
   path_provider: ^2.1.4
   path: ^1.9.0
   permission_handler: ^11.3.1
   share_plus: ^10.0.2
-  gal: ^2.3.0                              # save video to gallery
-  url_launcher: ^6.3.0
+  gal: ^2.3.0
   shared_preferences: ^2.3.2
-
-  # UI
-  google_fonts: ^6.2.1
-  cached_network_image: ^3.4.1
+  record: ^5.1.2
 
   # Utils
-  http: ^1.2.2
   uuid: ^4.5.1
   intl: ^0.19.0
 
@@ -54,22 +44,55 @@ flutter:
     - assets/fonts/
 
   fonts:
-    - family: Tajawal
+    # ── خط الواجهة الرئيسي (عربي + لاتيني، عصري فخم) ──
+    - family: Alexandria
       fonts:
-        - asset: assets/fonts/Tajawal-Regular.ttf
-        - asset: assets/fonts/Tajawal-Bold.ttf
+        - asset: assets/fonts/Alexandria.ttf
+    # ── خطوط أداة النص ──
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri-Regular.ttf
+        - asset: assets/fonts/Amiri-Bold.ttf
           weight: 700
-    - family: Almarai
+    - family: ReemKufi
       fonts:
-        - asset: assets/fonts/Almarai-Regular.ttf
-        - asset: assets/fonts/Almarai-Bold.ttf
-          weight: 700
-    - family: Anton
+        - asset: assets/fonts/ReemKufi.ttf
+    - family: ElMessiri
       fonts:
-        - asset: assets/fonts/Anton-Regular.ttf
-    - family: BebasNeue
+        - asset: assets/fonts/ElMessiri.ttf
+    - family: Changa
       fonts:
-        - asset: assets/fonts/BebasNeue-Regular.ttf
+        - asset: assets/fonts/Changa.ttf
     - family: Lalezar
       fonts:
         - asset: assets/fonts/Lalezar-Regular.ttf
+    - family: BalooBhaijaan2
+      fonts:
+        - asset: assets/fonts/BalooBhaijaan2.ttf
+    - family: ArefRuqaa
+      fonts:
+        - asset: assets/fonts/ArefRuqaa-Regular.ttf
+        - asset: assets/fonts/ArefRuqaa-Bold.ttf
+          weight: 700
+    - family: Marhey
+      fonts:
+        - asset: assets/fonts/Marhey.ttf
+    - family: IBMPlexSansArabic
+      fonts:
+        - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
+        - asset: assets/fonts/IBMPlexSansArabic-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
+          weight: 700
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/Rubik.ttf
+    - family: BebasNeue
+      fonts:
+        - asset: assets/fonts/BebasNeue-Regular.ttf
+    - family: Pacifico
+      fonts:
+        - asset: assets/fonts/Pacifico-Regular.ttf
+    - family: PlayfairDisplay
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay.ttf

@@ -54,6 +54,8 @@ jobs:
           cp android_patch/app_build.gradle android/app/build.gradle
           mkdir -p android/app/src/main/res/xml
           cp android_patch/file_paths.xml android/app/src/main/res/xml/file_paths.xml
+          # Launcher icons (custom Montagy brand) — must come AFTER flutter create
+          cp -r android_patch/res/. android/app/src/main/res/
           mkdir -p android/app/src/main/kotlin/com/montagy/app
           printf 'package com.montagy.app\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity : FlutterActivity()\n' > android/app/src/main/kotlin/com/montagy/app/MainActivity.kt
           echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
@@ -99,11 +101,11 @@ jobs:
 
       - name: Prepare APKs + checksums
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk Montagy-v1.1.0.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Montagy-v1.1.0-arm64.apk
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Montagy-v1.1.0-armv7.apk
-          ls -lh Montagy-v1.1.0.apk Montagy-v1.1.0-arm64.apk Montagy-v1.1.0-armv7.apk
-          sha256sum Montagy-v1.1.0.apk Montagy-v1.1.0-arm64.apk Montagy-v1.1.0-armv7.apk | tee SHA256SUMS.txt
+          cp build/app/outputs/flutter-apk/app-release.apk Montagy-v2.0.0.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Montagy-v2.0.0-arm64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Montagy-v2.0.0-armv7.apk
+          ls -lh Montagy-v2.0.0.apk Montagy-v2.0.0-arm64.apk Montagy-v2.0.0-armv7.apk
+          sha256sum Montagy-v2.0.0.apk Montagy-v2.0.0-arm64.apk Montagy-v2.0.0-armv7.apk | tee SHA256SUMS.txt
           {
             echo '### SHA-256 checksums'
             echo '```'
@@ -126,9 +128,9 @@ jobs:
         with:
           name: Montagy-APK
           path: |
-            Montagy-v1.1.0.apk
-            Montagy-v1.1.0-arm64.apk
-            Montagy-v1.1.0-armv7.apk
+            Montagy-v2.0.0.apk
+            Montagy-v2.0.0-arm64.apk
+            Montagy-v2.0.0-armv7.apk
             SHA256SUMS.txt
           retention-days: 90
 
@@ -140,17 +142,21 @@ jobs:
           body_path: release_notes.md
           append_body: true
           body: |
-            📱 **Montagy v1.1.0** — AI video editor & caption studio (CapCut-style)
+            📱 **مونتاجي v2.0.0** — استوديو مونتاج كامل (قوة CapCut + بساطة InShot)
 
-            - Built automatically by GitHub Actions from commit `${{ github.sha }}`
-            - **Montagy-v1.1.0-arm64.apk** ← لجميع الموبايلات الحديثة (2016+) ✅ حمّل ده
-            - Montagy-v1.1.0-armv7.apk — للأجهزة الأقدم 32-bit
-            - Montagy-v1.1.0.apk — Universal (كل المعالجات)
+            - مقاطع متعددة + تايم لاين متعدد التراكات (قص/تقسيم/تشذيب/سرعة/تدوير/اقتصاص/عكس/تجميد)
+            - 40+ فلتر أصلي + تعديل لوني كامل + كانفس ونسب أبعاد + انتقالات
+            - نصوص عربية بخطوط فاخرة + ملصقات إيموجي وصور + موسيقى وتعليق صوتي واستخراج صوت
+            - تصدير MP4 حقيقي بجودة حتى 1080p/2K مع تقدم مباشر
+            - Built automatically from commit `${{ github.sha }}`
+            - **Montagy-v2.0.0-arm64.apk** ← لجميع الموبايلات الحديثة ✅ حمّل ده
+            - Montagy-v2.0.0-armv7.apk — للأجهزة الأقدم 32-bit
+            - Montagy-v2.0.0.apk — Universal (كل المعالجات)
             - Install: download → open → allow "install unknown apps"
 
             ⚠️ Debug-signed build — for personal use / testing only.
           files: |
-            Montagy-v1.1.0.apk
-            Montagy-v1.1.0-arm64.apk
-            Montagy-v1.1.0-armv7.apk
+            Montagy-v2.0.0.apk
+            Montagy-v2.0.0-arm64.apk
+            Montagy-v2.0.0-armv7.apk
           make_latest: true
