@@ -57,7 +57,7 @@ jobs:
           # Launcher icons (custom Montagy brand) — must come AFTER flutter create
           cp -r android_patch/res/. android/app/src/main/res/
           mkdir -p android/app/src/main/kotlin/com/montagy/app
-          printf 'package com.montagy.app\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity : FlutterActivity()\n' > android/app/src/main/kotlin/com/montagy/app/MainActivity.kt
+          cp android_patch/MainActivity.kt android/app/src/main/kotlin/com/montagy/app/MainActivity.kt
           echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
 
       - name: Pub get

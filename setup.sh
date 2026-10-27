@@ -17,13 +17,7 @@ mkdir -p android/app/src/main/res/xml
 cp android_patch/file_paths.xml android/app/src/main/res/xml/file_paths.xml
 cp -r android_patch/res/. android/app/src/main/res/
 mkdir -p android/app/src/main/kotlin/com/montagy/app
-cat > android/app/src/main/kotlin/com/montagy/app/MainActivity.kt <<'EOF'
-package com.montagy.app
-
-import io.flutter.embedding.android.FlutterActivity
-
-class MainActivity : FlutterActivity()
-EOF
+cp android_patch/MainActivity.kt android/app/src/main/kotlin/com/montagy/app/MainActivity.kt
 
 echo "== 3/3 pub get =="
 $FLUTTER_CMD pub get

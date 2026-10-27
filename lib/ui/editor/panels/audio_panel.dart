@@ -1,12 +1,12 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
 
 import '../../../core/app_colors.dart';
 import '../../../core/app_font.dart';
 import '../../../core/strings.dart';
 import '../../../data/models.dart';
 import '../../../services/projects_store.dart';
+import '../../../services/voice_recorder.dart';
 import '../../widgets/common.dart';
 import '../dialogs/audio_edit_sheet.dart';
 import '../editor_screen.dart';
@@ -20,23 +20,25 @@ class AudioPanel extends StatefulWidget {
 }
 
 class _AudioPanelState extends State<AudioPanel> {
-  final _recorder = AudioRecorder();
   bool _recording = false;
   DateTime? _recStart;
 
   @override
   void dispose() {
-    _recorder.dispose();
+    if (_recording) {
+      VoiceRecorder.cancel();
+    }
     super.dispose();
   }
 
   Future<void> _toggleRecord(BuildContext context) async {
     final state = EditorScope.of(context);
     if (_recording) {
-      final path = await _recorder.stop();
+      final path = await VoiceRecorder.stop();
       setState(() => _recording = false);
       if (path == null || !context.mounted) return;
-      final dur = DateTime.now().difference(_recStart ?? DateTime.now()).inSeconds;
+      final dur =
+          DateTime.now().difference(_recStart ?? DateTime.now()).inSeconds;
       state.addAudio(AudioTrack(
         id: ProjectsStore.newId(),
         path: path,
@@ -55,7 +57,7 @@ class _AudioPanelState extends State<AudioPanel> {
       return;
     }
 
-    final hasPerm = await _recorder.hasPermission();
+    final hasPerm = await VoiceRecorder.ensurePermission();
     if (!hasPerm) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -66,15 +68,15 @@ class _AudioPanelState extends State<AudioPanel> {
     }
     final media = await ProjectsStore.mediaDir();
     final outPath = '${media.path}/${ProjectsStore.newId()}.m4a';
-    await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 128000,
-        sampleRate: 44100,
-        numChannels: 1,
-      ),
-      path: outPath,
-    );
+    final started = await VoiceRecorder.start(outPath);
+    if (!started) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر بدء التسجيل')),
+        );
+      }
+      return;
+    }
     _recStart = DateTime.now();
     setState(() => _recording = true);
   }
