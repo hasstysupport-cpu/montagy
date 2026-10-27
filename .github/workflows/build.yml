@@ -1,0 +1,91 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter (pinned 3.27.4)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.4'
+          channel: stable
+          cache: true
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      # flutter create . must not touch our source files — back them up first
+      - name: Backup source files
+        run: |
+          mkdir -p /tmp/montagy-bak
+          cp -r lib /tmp/montagy-bak/lib
+          cp pubspec.yaml README.md analysis_options.yaml /tmp/montagy-bak/
+
+      - name: Scaffold android platform (flutter create)
+        run: flutter create . --org com.montagy --project-name montagy --platforms android
+
+      - name: Restore source files
+        run: |
+          cp -r /tmp/montagy-bak/lib/* lib/
+          cp /tmp/montagy-bak/pubspec.yaml pubspec.yaml
+          cp /tmp/montagy-bak/README.md README.md
+          cp /tmp/montagy-bak/analysis_options.yaml analysis_options.yaml
+
+      # Same steps as setup.sh
+      - name: Apply Montagy android patches
+        run: |
+          cp android_patch/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp android_patch/app_build.gradle android/app/build.gradle
+          mkdir -p android/app/src/main/res/xml
+          cp android_patch/file_paths.xml android/app/src/main/res/xml/file_paths.xml
+          mkdir -p android/app/src/main/kotlin/com/montagy/app
+          printf 'package com.montagy.app\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity : FlutterActivity()\n' > android/app/src/main/kotlin/com/montagy/app/MainActivity.kt
+          echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Prepare APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk Montagy-v1.0.0.apk
+          ls -lh Montagy-v1.0.0.apk
+
+      - name: Upload artifact (90 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Montagy-APK
+          path: Montagy-v1.0.0.apk
+          retention-days: 90
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Montagy APK — Build #${{ github.run_number }}
+          body: |
+            📱 **Montagy v1.0.0** — AI video editor & caption studio (CapCut-style)
+
+            - Built automatically by GitHub Actions from commit `${{ github.sha }}`
+            - Universal APK (arm64 + armv7 + x86_64), FFmpeg full-gpl included
+            - Install: download → open → allow "install unknown apps"
+
+            ⚠️ Debug-signed build — for personal use / testing only.
+          files: Montagy-v1.0.0.apk
+          make_latest: true
