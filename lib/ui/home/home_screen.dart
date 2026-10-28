@@ -418,7 +418,7 @@ class _SectionTitle extends StatelessWidget {
           width: 4,
           height: 18,
           decoration: BoxDecoration(
-            gradient: AppColors.brandGradient,
+            gradient: context.accentGradient,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -455,7 +455,7 @@ class _BigNewButton extends StatelessWidget {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             gradient: accent
-                ? AppColors.brandGradient
+                ? context.accentGradient
                 : null,
             color: accent
                 ? null
@@ -472,10 +472,10 @@ class _BigNewButton extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: accent
                       ? Colors.white.withValues(alpha: 0.18)
-                      : AppColors.blue.withValues(alpha: 0.12),
+                      : context.accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: accent ? Colors.white : AppColors.blue),
+                child: Icon(icon, color: accent ? Colors.white : context.accent),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -574,7 +574,7 @@ class _ProjectCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis),
                     ),
                     Text(_duration,
-                        style: AppFont.w(600, size: 11, color: AppColors.blue)),
+                        style: AppFont.w(600, size: 11, color: context.accent)),
                   ],
                 ),
               ),
@@ -612,7 +612,7 @@ class _EmptyState extends StatelessWidget {
               padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: [
-                  AppColors.blue.withValues(alpha: 0.14),
+                  context.accent.withValues(alpha: 0.14),
                   AppColors.cyan.withValues(alpha: 0.10),
                 ]),
                 shape: BoxShape.circle,

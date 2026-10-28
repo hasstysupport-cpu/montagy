@@ -156,11 +156,11 @@ class _AspectOption extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.blue.withValues(alpha: 0.13)
+              ? context.accent.withValues(alpha: 0.13)
               : (dark ? AppColors.darkSurfaceHi : AppColors.lightSurfaceHi),
           borderRadius: BorderRadius.circular(13),
           border: Border.all(
-            color: selected ? AppColors.blue : Colors.transparent,
+            color: selected ? context.accent : Colors.transparent,
             width: 1.8,
           ),
         ),
@@ -171,13 +171,13 @@ class _AspectOption extends StatelessWidget {
               width: w.clamp(14, 60),
               height: h * 0.52,
               decoration: BoxDecoration(
-                color: selected ? AppColors.blue : Colors.grey,
+                color: selected ? context.accent : Colors.grey,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
             const SizedBox(height: 6),
             AppFont.w(600, size: 9.5,
-                    color: selected ? AppColors.blue : null)
+                    color: selected ? context.accent : null)
                 .make(label),
           ],
         ),

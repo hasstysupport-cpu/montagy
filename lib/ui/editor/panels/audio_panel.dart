@@ -161,7 +161,7 @@ class _AudioPanelState extends State<AudioPanel> {
                 children: [
                   Icon(
                     _recording ? Icons.stop_circle : Icons.mic,
-                    color: _recording ? AppColors.danger : AppColors.blue,
+                    color: _recording ? AppColors.danger : context.accent,
                     size: 22,
                   ),
                   const SizedBox(width: 10),
@@ -209,7 +209,7 @@ class _AudioPanelState extends State<AudioPanel> {
                                   ? Icons.graphic_eq
                                   : Icons.music_note,
                           size: 18,
-                          color: AppColors.blue,
+                          color: context.accent,
                         ),
                         const SizedBox(width: 10),
                         Expanded(

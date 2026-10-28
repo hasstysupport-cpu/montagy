@@ -35,7 +35,7 @@ Future<void> showAudioEditSheet(BuildContext context, AudioTrack track) async {
                 ),
                 Text(
                   S.durationLabel(track.duration),
-                  style: AppFont.w(600, size: 12, color: AppColors.blue),
+                  style: AppFont.w(600, size: 12, color: ctx.accent),
                   textDirection: TextDirection.ltr,
                 ),
               ],

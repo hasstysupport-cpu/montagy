@@ -53,14 +53,14 @@ class TextPanel extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         color: selected
-                            ? AppColors.blue.withValues(alpha: 0.16)
+                            ? context.accent.withValues(alpha: 0.16)
                             : Theme.of(context).brightness == Brightness.dark
                                 ? AppColors.darkSurfaceHi
                                 : AppColors.lightSurfaceHi,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color:
-                              selected ? AppColors.blue : Colors.transparent,
+                              selected ? context.accent : Colors.transparent,
                           width: 1.6,
                         ),
                       ),
@@ -71,7 +71,7 @@ class TextPanel extends StatelessWidget {
                             style: TextStyle(
                               fontFamily: t.fontFamily,
                               fontSize: 12,
-                              color: selected ? AppColors.blue : null,
+                              color: selected ? context.accent : null,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

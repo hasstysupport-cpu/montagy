@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/app_font.dart';
@@ -14,6 +15,12 @@ import 'dialogs/transition_sheet.dart';
 import 'editor_screen.dart';
 
 /// التايم لاين — مسطرة + مقاطع + تراكات صوت ونصوص، مؤشر ثابت بالمنتصف.
+/// الإيماءات (نمط CapCut/InShot):
+/// - قرص → تكبير/تصغير التايم لاين
+/// - سحب أفقي → تحريك المؤشر
+/// - ضغط طويل على مقطع → سحبه لإعادة الترتيب
+/// - سحب مقطع صوت/طبقة → تحريك بدايته (مع التصاق بالمؤشر)
+/// - مقابض زرقاء على الأطراف → تشذيب
 class TimelineView extends StatefulWidget {
   const TimelineView({super.key});
 
@@ -27,16 +34,17 @@ class _TimelineViewState extends State<TimelineView> {
   bool _dragging = false;
   double _gestureStartPps = 64;
 
+  // سحب إعادة الترتيب
+  int? _dragClipIndex;
+  double? _dragPointerT;
+
+  // سحب الصوت/الطبقات
+  bool _snapHaptic = false;
+
   static const double rulerH = 26;
   static const double clipTrackH = 62;
   static const double audioTrackH = 30;
   static const double overlayTrackH = 30;
-
-  @override
-  void dispose() {
-    _dragging = false;
-    super.dispose();
-  }
 
   double _timeAtCenter(EditorState state, double viewportW) =>
       (_scrollX + viewportW / 2) / _pps;
@@ -56,6 +64,28 @@ class _TimelineViewState extends State<TimelineView> {
   double _contentWidth(EditorState state, double viewportW) {
     final w = state.totalDuration * _pps + viewportW;
     return w.clamp(viewportW, double.infinity);
+  }
+
+  // ── التصاق بالمؤشر ──
+  double _snap(double t, EditorState state, {bool enableHaptic = true}) {
+    const snapPx = 9.0;
+    final snapT = snapPx / _pps;
+    var snapped = t;
+    var didSnap = false;
+    if ((t - state.projectTime).abs() < snapT) {
+      snapped = state.projectTime;
+      didSnap = true;
+    } else if (t.abs() < snapT) {
+      snapped = 0;
+      didSnap = true;
+    }
+    if (didSnap && enableHaptic && !_snapHaptic) {
+      _snapHaptic = true;
+      HapticFeedback.selectionClick();
+    } else if (!didSnap) {
+      _snapHaptic = false;
+    }
+    return snapped;
   }
 
   @override
@@ -164,25 +194,13 @@ class _TimelineViewState extends State<TimelineView> {
                                     child: Stack(
                                       children: [
                                         for (var i = 0; i < state.project.clips.length; i++)
-                                          _ClipWidget(
-                                            key: ValueKey(state.project.clips[i].id),
-                                            clip: state.project.clips[i],
-                                            start: starts[i],
-                                            pps: _pps,
-                                            selected: state.selectedClipId ==
-                                                state.project.clips[i].id,
-                                            onTap: () => state.selectClip(
-                                                state.project.clips[i].id),
-                                            onTrimStart: (dx) => _trimClip(
-                                                state, state.project.clips[i], dx, true),
-                                            onTrimEnd: (dx) => _trimClip(
-                                                state, state.project.clips[i], dx, false),
-                                          ),
+                                          _buildClip(state, i, starts),
                                         // شارات الانتقالات
                                         for (var i = 0;
                                             i < state.project.clips.length - 1;
                                             i++)
-                                          if (state.project.clips[i].transitionOutId != null)
+                                          if (state.project.clips[i].transitionOutId != null &&
+                                              _dragClipIndex == null)
                                             Positioned(
                                               left: (starts[i] +
                                                       state.project.clips[i]
@@ -196,14 +214,15 @@ class _TimelineViewState extends State<TimelineView> {
                                               ),
                                             ),
                                         // زر +
-                                        Positioned(
-                                          left: state.totalDuration * _pps + 8,
-                                          top: 0,
-                                          height: clipTrackH,
-                                          child: _AddClipButton(
-                                            onTap: () => showAddMediaSheet(context),
+                                        if (_dragClipIndex == null)
+                                          Positioned(
+                                            left: state.totalDuration * _pps + 8,
+                                            top: 0,
+                                            height: clipTrackH,
+                                            child: _AddClipButton(
+                                              onTap: () => showAddMediaSheet(context),
+                                            ),
                                           ),
-                                        ),
                                       ],
                                     ),
                                   ),
@@ -218,10 +237,16 @@ class _TimelineViewState extends State<TimelineView> {
                                         children: [
                                           for (final tr in state.project.audio)
                                             _AudioBlock(
+                                              key: ValueKey('aud_${tr.id}'),
                                               track: tr,
                                               pps: _pps,
                                               onTap: () =>
                                                   showAudioEditSheet(context, tr),
+                                              onMove: (dt) => _moveAudio(state, tr, dt),
+                                              onTrimStart: (dx) =>
+                                                  _trimAudio(state, tr, dx, true),
+                                              onTrimEnd: (dx) =>
+                                                  _trimAudio(state, tr, dx, false),
                                             ),
                                         ],
                                       ),
@@ -240,6 +265,7 @@ class _TimelineViewState extends State<TimelineView> {
                                         children: [
                                           for (final t in state.project.texts)
                                             _OverlayPill(
+                                              key: ValueKey('txt_${t.id}'),
                                               start: t.start,
                                               duration: t.end - t.start,
                                               pps: _pps,
@@ -252,9 +278,15 @@ class _TimelineViewState extends State<TimelineView> {
                                               },
                                               onDoubleTap: () =>
                                                   showTextEditSheet(context, t),
+                                              onMove: (dt) => _shiftText(state, t, dt),
+                                              onTrimStart: (dx) =>
+                                                  _trimText(state, t, dx, true),
+                                              onTrimEnd: (dx) =>
+                                                  _trimText(state, t, dx, false),
                                             ),
                                           for (final s in state.project.overlays)
                                             _OverlayPill(
+                                              key: ValueKey('stk_${s.id}'),
                                               start: s.start,
                                               duration: s.end - s.start,
                                               pps: _pps,
@@ -267,6 +299,11 @@ class _TimelineViewState extends State<TimelineView> {
                                               onTap: () {
                                                 state.selectSticker(s.id);
                                               },
+                                              onMove: (dt) => _shiftSticker(state, s, dt),
+                                              onTrimStart: (dx) =>
+                                                  _trimSticker(state, s, dx, true),
+                                              onTrimEnd: (dx) =>
+                                                  _trimSticker(state, s, dx, false),
                                             ),
                                         ],
                                       ),
@@ -297,6 +334,138 @@ class _TimelineViewState extends State<TimelineView> {
         );
       },
     );
+  }
+
+  // ── بناء مقطع مع دعم السحب للترتيب ──
+
+  Widget _buildClip(EditorState state, int i, List<double> starts) {
+    final clip = state.project.clips[i];
+    final isDragged = _dragClipIndex == i && _dragPointerT != null;
+
+    var left = starts[i] * _pps;
+    if (isDragged) {
+      left = ((_dragPointerT! - clip.timelineDuration / 2)
+              .clamp(0.0, state.totalDuration)) *
+          _pps;
+    }
+
+    return _ClipWidget(
+      key: ValueKey(clip.id),
+      clip: clip,
+      left: left,
+      pps: _pps,
+      selected: state.selectedClipId == clip.id || isDragged,
+      dragging: isDragged,
+      onTap: () {
+        if (_dragClipIndex == null) state.selectClip(clip.id);
+      },
+      onTrimStart: (dx) => _trimClip(state, clip, dx, true),
+      onTrimEnd: (dx) => _trimClip(state, clip, dx, false),
+      onDragStart: (details) {
+        state.beginUndoGroup();
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _dragClipIndex = i;
+          _dragPointerT = (details.globalPosition.dx + _scrollX) / _pps;
+        });
+      },
+      onDragUpdate: (details) {
+        if (_dragClipIndex != i) return;
+        final pointerT = (details.globalPosition.dx + _scrollX) / _pps;
+        _dragPointerT = pointerT;
+        final target = _targetIndexFor(state, pointerT);
+        if (target != _dragClipIndex) {
+          state.reorderLive(_dragClipIndex!, target);
+          _dragClipIndex = target;
+          HapticFeedback.selectionClick();
+        }
+        setState(() {});
+      },
+      onDragEnd: (_) {
+        setState(() {
+          _dragClipIndex = null;
+          _dragPointerT = null;
+        });
+      },
+    );
+  }
+
+  int _targetIndexFor(EditorState state, double pointerT) {
+    final starts = state.clipStarts;
+    var target = 0;
+    for (var i = 0; i < state.project.clips.length; i++) {
+      final mid = starts[i] + state.project.clips[i].timelineDuration / 2;
+      if (pointerT > mid) target = i;
+    }
+    return target;
+  }
+
+  // ── حركة الصوت والطبقات ──
+
+  void _moveAudio(EditorState state, AudioTrack tr, double dt) {
+    final dur = tr.duration;
+    var newStart = tr.startAt + dt;
+    newStart = _snap(newStart, state);
+    newStart =
+        newStart.clamp(0.0, (state.totalDuration - dur).clamp(0.0, double.infinity));
+    state.updateAudio(tr..startAt = newStart);
+  }
+
+  void _trimAudio(EditorState state, AudioTrack tr, double dx, bool start) {
+    final srcDelta = dx / _pps;
+    if (start) {
+      final newIn = (tr.inPoint + srcDelta).clamp(0.0, tr.outPoint - 0.3);
+      // نحافظ على الحافة اليمنى ثابتة
+      final shift = newIn - tr.inPoint;
+      state.updateAudio(tr
+        ..inPoint = newIn
+        ..startAt = (tr.startAt + shift).clamp(0.0, double.infinity));
+    } else {
+      final newOut = (tr.outPoint + srcDelta).clamp(tr.inPoint + 0.3, 7200.0);
+      state.updateAudio(tr..outPoint = newOut);
+    }
+  }
+
+  void _shiftText(EditorState state, TextOverlay t, double dt) {
+    final dur = t.end - t.start;
+    var newStart = _snap(t.start + dt, state);
+    newStart = newStart
+        .clamp(0.0, (state.totalDuration - dur).clamp(0.0, double.infinity));
+    state.updateText(t
+      ..start = newStart
+      ..end = newStart + dur);
+  }
+
+  void _trimText(EditorState state, TextOverlay t, double dx, bool start) {
+    final d = dx / _pps;
+    if (start) {
+      final ns = (t.start + d).clamp(0.0, t.end - 0.3);
+      state.updateText(t..start = ns);
+    } else {
+      final ne = (t.end + d).clamp(t.start + 0.3, state.totalDuration + 30);
+      state.updateText(t..end = ne);
+    }
+  }
+
+  void _shiftSticker(EditorState state, ImageOverlay s, double dt) {
+    final dur = s.end - s.start;
+    var newStart = _snap(s.start + dt, state);
+    newStart = newStart
+        .clamp(0.0, (state.totalDuration - dur).clamp(0.0, double.infinity));
+    state.updateSticker(s
+      ..start = newStart
+      ..end = newStart + dur);
+  }
+
+  void _trimSticker(EditorState state, ImageOverlay s, double dx, bool start) {
+    final d = dx / _pps;
+    if (start) {
+      final ns = (s.start + d).clamp(0.0, s.end - 0.3);
+      state.updateSticker(s..start = ns);
+    } else {
+      final ne = (s.end + d).clamp(s.start + 0.3, state.totalDuration + 30);
+      state.updateSticker(s..end = ne);
+    }
   }
 
   Widget _emptyTimeline(bool dark) {
@@ -342,119 +511,143 @@ class _TimelineViewState extends State<TimelineView> {
 
 class _ClipWidget extends StatelessWidget {
   final ClipItem clip;
-  final double start;
+  final double left;
   final double pps;
   final bool selected;
+  final bool dragging;
   final VoidCallback onTap;
   final ValueChanged<double> onTrimStart;
   final ValueChanged<double> onTrimEnd;
+  final void Function(LongPressStartDetails) onDragStart;
+  final void Function(LongPressMoveUpdateDetails) onDragUpdate;
+  final void Function(LongPressEndDetails) onDragEnd;
 
   const _ClipWidget({
     super.key,
     required this.clip,
-    required this.start,
+    required this.left,
     required this.pps,
     required this.selected,
+    required this.dragging,
     required this.onTap,
     required this.onTrimStart,
     required this.onTrimEnd,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
   });
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = context.accent;
     final w = clip.timelineDuration * pps;
     final thumbOk = clip.thumbPath != null && File(clip.thumbPath!).existsSync();
 
     return Positioned(
-      left: start * pps,
+      left: left,
       width: w.clamp(8.0, double.infinity),
-      top: 0,
+      top: dragging ? -2 : 0,
       height: 62,
       child: GestureDetector(
         onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: dark ? AppColors.darkSurfaceHi : AppColors.lightSurfaceHi,
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(
-              color: selected ? AppColors.blue : Colors.transparent,
-              width: 2.2,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            children: [
-              // الصور المصغرة
-              Positioned.fill(
-                child: thumbOk
-                    ? LayoutBuilder(builder: (ctx, box) {
-                        final count = (box.maxWidth / 54).ceil();
-                        return Row(
-                          children: [
-                            for (var i = 0; i < count; i++)
-                              Expanded(
-                                child: Image.file(
-                                  File(clip.thumbPath!),
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 72,
-                                  errorBuilder: (_, __, ___) =>
-                                      const SizedBox.shrink(),
-                                ),
-                              ),
-                          ],
-                        );
-                      })
-                    : Center(
-                        child: Icon(
-                          clip.type == MediaType.photo
-                              ? Icons.image_outlined
-                              : Icons.videocam_outlined,
-                          size: 22,
-                          color: dark
-                              ? AppColors.darkTextDim
-                              : AppColors.lightTextDim,
-                        ),
-                      ),
+        onLongPressStart: onDragStart,
+        onLongPressMoveUpdate: onDragUpdate,
+        onLongPressEnd: onDragEnd,
+        child: Transform.scale(
+          scale: dragging ? 1.06 : 1,
+          child: Container(
+            decoration: BoxDecoration(
+              color: dark ? AppColors.darkSurfaceHi : AppColors.lightSurfaceHi,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: selected ? accent : Colors.transparent,
+                width: 2.2,
               ),
-              // تعتيم خفيف + اسم
-              PositionedDirectional(
-                bottom: 0,
-                start: 0,
-                end: 0,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  color: Colors.black.withValues(alpha: 0.45),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          clip.type == MediaType.photo
-                              ? '${clip.photoDuration.toStringAsFixed(1)}s'
-                              : S.durationLabel(clip.timelineDuration),
-                          style: AppFont.w(600,
-                              size: 9, color: Colors.white),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textDirection: TextDirection.ltr,
-                        ),
+              boxShadow: dragging
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
                       ),
-                      if (clip.muted)
-                        const Icon(Icons.volume_off,
-                            size: 10, color: Colors.white70),
-                      if (clip.reversed)
-                        const Icon(Icons.replay, size: 10, color: Colors.white70),
-                    ],
+                    ]
+                  : null,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                // الصور المصغرة
+                Positioned.fill(
+                  child: thumbOk
+                      ? LayoutBuilder(builder: (ctx, box) {
+                          final count = (box.maxWidth / 54).ceil();
+                          return Row(
+                            children: [
+                              for (var i = 0; i < count; i++)
+                                Expanded(
+                                  child: Image.file(
+                                    File(clip.thumbPath!),
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 72,
+                                    errorBuilder: (_, __, ___) =>
+                                        const SizedBox.shrink(),
+                                  ),
+                                ),
+                            ],
+                          );
+                        })
+                      : Center(
+                          child: Icon(
+                            clip.type == MediaType.photo
+                                ? Icons.image_outlined
+                                : Icons.videocam_outlined,
+                            size: 22,
+                            color: dark
+                                ? AppColors.darkTextDim
+                                : AppColors.lightTextDim,
+                          ),
+                        ),
+                ),
+                // تعتيم خفيف + اسم
+                PositionedDirectional(
+                  bottom: 0,
+                  start: 0,
+                  end: 0,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    color: Colors.black.withValues(alpha: 0.45),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            clip.type == MediaType.photo
+                                ? '${clip.photoDuration.toStringAsFixed(1)}s'
+                                : S.durationLabel(clip.timelineDuration),
+                            style: AppFont.w(600,
+                                size: 9, color: Colors.white),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textDirection: TextDirection.ltr,
+                          ),
+                        ),
+                        if (clip.muted)
+                          const Icon(Icons.volume_off,
+                              size: 10, color: Colors.white70),
+                        if (clip.reversed)
+                          const Icon(Icons.replay, size: 10, color: Colors.white70),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              // مقابض التشذيب
-              if (selected) ...[
-                _TrimHandle(alignStart: true, onDrag: onTrimStart),
-                _TrimHandle(alignStart: false, onDrag: onTrimEnd),
+                // مقابض التشذيب
+                if (selected && !dragging) ...[
+                  _TrimHandle(alignStart: true, onDrag: onTrimStart),
+                  _TrimHandle(alignStart: false, onDrag: onTrimEnd),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -469,6 +662,7 @@ class _TrimHandle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = context.accent;
     return PositionedDirectional(
       start: alignStart ? 0 : null,
       end: alignStart ? null : 0,
@@ -480,7 +674,7 @@ class _TrimHandle extends StatelessWidget {
         onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
         child: Container(
           alignment: Alignment.center,
-          color: AppColors.blue,
+          color: accent,
           child: Container(
             width: 3.2,
             height: 26,
@@ -507,7 +701,7 @@ class _TransitionBadge extends StatelessWidget {
         width: 28,
         height: 28,
         decoration: BoxDecoration(
-          gradient: AppColors.brandGradient,
+          gradient: context.accentGradient,
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2),
           boxShadow: [
@@ -553,23 +747,34 @@ class _AddClipButton extends StatelessWidget {
   }
 }
 
+/// مقطع صوتي قابل للسحب والتشذيب.
 class _AudioBlock extends StatelessWidget {
   final AudioTrack track;
   final double pps;
   final VoidCallback onTap;
+  final ValueChanged<double> onMove;
+  final ValueChanged<double> onTrimStart;
+  final ValueChanged<double> onTrimEnd;
+
   const _AudioBlock({
+    super.key,
     required this.track,
     required this.pps,
     required this.onTap,
+    required this.onMove,
+    required this.onTrimStart,
+    required this.onTrimEnd,
   });
 
   @override
   Widget build(BuildContext context) {
+    final accent = context.accent;
     final color = track.kind == AudioKind.voice
         ? AppColors.warn
         : track.kind == AudioKind.extracted
             ? AppColors.success
-            : AppColors.blue;
+            : accent;
+
     return Positioned(
       left: track.startAt * pps,
       width: (track.duration * pps).clamp(20.0, double.infinity),
@@ -577,31 +782,80 @@ class _AudioBlock extends StatelessWidget {
       height: 30,
       child: GestureDetector(
         onTap: onTap,
+        onScaleStart: (_) {},
+        onScaleUpdate: (d) {
+          if (d.pointerCount == 1) onMove(d.focalPointDelta.dx);
+        },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.only(left: 8, right: 20),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.22),
             borderRadius: BorderRadius.circular(7),
             border: Border.all(color: color.withValues(alpha: 0.65)),
           ),
-          child: Row(
+          child: Stack(
             children: [
-              Icon(
-                track.kind == AudioKind.voice
-                    ? Icons.mic
-                    : track.kind == AudioKind.extracted
-                        ? Icons.graphic_eq
-                        : Icons.music_note,
-                size: 13,
-                color: color,
+              Row(
+                children: [
+                  Icon(
+                    track.kind == AudioKind.voice
+                        ? Icons.mic
+                        : track.kind == AudioKind.extracted
+                            ? Icons.graphic_eq
+                            : Icons.music_note,
+                    size: 13,
+                    color: color,
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      track.title,
+                      style: AppFont.w(600, size: 9.5, color: color),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  track.title,
-                  style: AppFont.w(600, size: 9.5, color: color),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              // مقابض التشذيب
+              PositionedDirectional(
+                start: 0,
+                top: 0,
+                bottom: 0,
+                width: 14,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragUpdate: (d) => onTrimStart(d.delta.dx),
+                  child: Center(
+                    child: Container(
+                      width: 3,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              PositionedDirectional(
+                end: 0,
+                top: 0,
+                bottom: 0,
+                width: 14,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragUpdate: (d) => onTrimEnd(d.delta.dx),
+                  child: Center(
+                    child: Container(
+                      width: 3,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -612,6 +866,7 @@ class _AudioBlock extends StatelessWidget {
   }
 }
 
+/// طبقة نص/ملصق — قابلة للسحب والتشذيب والنقر المزدوج.
 class _OverlayPill extends StatelessWidget {
   final double start;
   final double duration;
@@ -622,8 +877,12 @@ class _OverlayPill extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onDoubleTap;
+  final ValueChanged<double> onMove;
+  final ValueChanged<double> onTrimStart;
+  final ValueChanged<double> onTrimEnd;
 
   const _OverlayPill({
+    super.key,
     required this.start,
     required this.duration,
     required this.pps,
@@ -632,6 +891,9 @@ class _OverlayPill extends StatelessWidget {
     required this.color,
     required this.selected,
     required this.onTap,
+    required this.onMove,
+    required this.onTrimStart,
+    required this.onTrimEnd,
     this.onDoubleTap,
   });
 
@@ -645,26 +907,76 @@ class _OverlayPill extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         onDoubleTap: onDoubleTap,
+        onScaleStart: (_) {},
+        onScaleUpdate: (d) {
+          if (d.pointerCount == 1) onMove(d.focalPointDelta.dx);
+        },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.only(left: 8, right: 20),
           decoration: BoxDecoration(
             color: color.withValues(alpha: selected ? 0.35 : 0.18),
             borderRadius: BorderRadius.circular(7),
             border: Border.all(
                 color: selected ? color : color.withValues(alpha: 0.5)),
           ),
-          child: Row(
+          child: Stack(
             children: [
-              Icon(icon, size: 13, color: color),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppFont.w(600, size: 9.5, color: color),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              Row(
+                children: [
+                  Icon(icon, size: 13, color: color),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: AppFont.w(600, size: 9.5, color: color),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
+              if (selected) ...[
+                PositionedDirectional(
+                  start: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 14,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragUpdate: (d) => onTrimStart(d.delta.dx),
+                    child: Center(
+                      child: Container(
+                        width: 3,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                PositionedDirectional(
+                  end: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 14,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragUpdate: (d) => onTrimEnd(d.delta.dx),
+                    child: Center(
+                      child: Container(
+                        width: 3,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -685,6 +997,7 @@ class _Playhead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = context.accent;
     return SizedBox(
       height: height,
       child: Column(
@@ -692,7 +1005,7 @@ class _Playhead extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: AppColors.blue,
+              color: accent,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -704,7 +1017,7 @@ class _Playhead extends StatelessWidget {
           Expanded(
             child: Container(
               width: 2.2,
-              color: AppColors.blue,
+              color: accent,
             ),
           ),
         ],

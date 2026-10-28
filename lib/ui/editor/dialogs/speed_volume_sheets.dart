@@ -57,7 +57,7 @@ Future<void> showSpeedSheet(BuildContext context, ClipItem clip) async {
                       HapticFeedback.selectionClick();
                       setSheet(() => value = v);
                     },
-                    selectedColor: AppColors.blue,
+                    selectedColor: ctx.accent,
                     showCheckmark: false,
                     labelStyle: AppFont.w(sel ? 700 : 500,
                         size: 12.5, color: sel ? Colors.white : null),
@@ -129,13 +129,13 @@ Future<void> showVolumeSheet(BuildContext context, ClipItem clip) async {
                   onPressed: () => setSheet(() => muted = !muted),
                   icon: Icon(
                     muted ? Icons.volume_off : Icons.volume_up,
-                    color: muted ? AppColors.danger : AppColors.blue,
+                    color: muted ? AppColors.danger : ctx.accent,
                   ),
                   label: Text(
                     muted ? S.unmute : S.mute,
                     style: AppFont.w(600,
                         size: 13,
-                        color: muted ? AppColors.danger : AppColors.blue),
+                        color: muted ? AppColors.danger : ctx.accent),
                   ),
                 ),
               ],

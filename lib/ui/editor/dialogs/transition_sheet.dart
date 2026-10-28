@@ -130,12 +130,12 @@ class _TransitionOption extends StatelessWidget {
         width: 74,
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.blue.withValues(alpha: 0.15)
+              ? context.accent.withValues(alpha: 0.15)
               : (dark ? AppColors.darkSurfaceHi : AppColors.lightSurfaceHi),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected
-                ? AppColors.blue
+                ? context.accent
                 : (dark ? AppColors.darkBorder : AppColors.lightBorder),
             width: selected ? 2 : 1,
           ),
@@ -145,10 +145,10 @@ class _TransitionOption extends StatelessWidget {
           children: [
             Icon(icon,
                 size: 24,
-                color: selected ? AppColors.blue : null),
+                color: selected ? context.accent : null),
             const SizedBox(height: 6),
             AppFont.w(600, size: 10,
-                    color: selected ? AppColors.blue : null)
+                    color: selected ? context.accent : null)
                 .make(label),
           ],
         ),

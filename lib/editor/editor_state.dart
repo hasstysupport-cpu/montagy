@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 
 import '../data/color_engine.dart';
 import '../data/models.dart';
+import '../services/ffmpeg_gateway.dart';
 import '../services/projects_store.dart';
 
 /// الحالة المركزية للمحرر — تشغيل + تعديلات + تايم لاين + صوت.
@@ -37,6 +38,14 @@ class EditorState extends ChangeNotifier {
       selectedTextId = null;
       selectedStickerId = null;
     }
+    notifyListeners();
+  }
+
+  /// إلغاء كل التحديد (زر ✕ في شريط الأدوات).
+  void clearSelection() {
+    selectedClipId = null;
+    selectedTextId = null;
+    selectedStickerId = null;
     notifyListeners();
   }
 
@@ -441,6 +450,19 @@ class EditorState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// إعادة ترتيب حية أثناء السحب الطويل — بدون تعبئة التراجع (نستدعي
+  /// beginUndoGroup مرة عند بدء السحب).
+  void reorderLive(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= project.clips.length) return;
+    if (newIndex < 0 || newIndex >= project.clips.length) return;
+    if (oldIndex == newIndex) return;
+    final clip = project.clips.removeAt(oldIndex);
+    project.clips.insert(newIndex, clip);
+    currentClipIndex = newIndex;
+    _autosave();
+    notifyListeners();
+  }
+
   void updateClip(ClipItem clip,
       {bool seekAfter = false, bool structural = false}) {
     if (structural) pushUndo();
@@ -474,6 +496,147 @@ class EditorState extends ChangeNotifier {
     }
     _autosave();
     notifyListeners();
+  }
+
+  /// استخراج الصوت من مقطع فيديو إلى تراك صوتي مستقل.
+  Future<bool> extractAudio(ClipItem clip) async {
+    if (clip.type != MediaType.video) return false;
+    final idx = project.clips.indexOf(clip);
+    final startAt = idx >= 0 && idx < clipStarts.length ? clipStarts[idx] : 0;
+
+    final dir = await ProjectsStore.mediaDir();
+    final outPath = '${dir.path}/${ProjectsStore.newId()}.m4a';
+
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i', clip.sourcePath,
+      '-vn',
+      '-ac', '2',
+      '-ar', '44100',
+      '-c:a', 'aac',
+      '-b:a', '160k',
+      outPath,
+    ]);
+    if (!ReturnCode.isSuccess(await session.getReturnCode())) return false;
+    if (!File(outPath).existsSync()) return false;
+
+    // مدة الصوت من الملف الناتج
+    var dur = clip.trimDuration;
+    try {
+      final probe = await FFprobeKit.getMediaInformation(outPath);
+      final info = probe.getMediaInformation();
+      final d = double.tryParse(info?.getDuration() ?? '');
+      if (d != null && d > 0) dur = d;
+    } catch (_) {}
+
+    addAudio(AudioTrack(
+      id: ProjectsStore.newId(),
+      path: outPath,
+      kind: AudioKind.extracted,
+      title: 'صوت: ${clip.title}',
+      startAt: startAt.clamp(0.0, totalDuration).toDouble(),
+      inPoint: 0,
+      outPoint: dur,
+      volume: 1,
+    ));
+    return true;
+  }
+
+  /// تجميد الإطار الحالي للمؤشر — يضيف صورة بعد المقطع النشط.
+  Future<bool> freezeFrameAtPlayhead() async {
+    if (project.clips.isEmpty) return false;
+    final i = clipIndexAt(projectTime);
+    final clip = project.clips[i];
+    if (clip.type != MediaType.video) return false;
+    final starts = clipStarts;
+    final localT =
+        (projectTime - starts[i]).clamp(0.0, clip.timelineDuration);
+    final srcPos = clip.inPoint + localT * clip.speed;
+
+    final tmp = await ProjectsStore.thumbsDir();
+    final outPath = '${tmp.path}/${ProjectsStore.newId()}.png';
+
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-ss', srcPos.toStringAsFixed(3),
+      '-i', clip.sourcePath,
+      '-frames:v', '1',
+      '-q:v', '2',
+      outPath,
+    ]);
+    if (!ReturnCode.isSuccess(await session.getReturnCode())) return false;
+    if (!File(outPath).existsSync()) return false;
+
+    final photo = ClipItem(
+      id: ProjectsStore.newId(),
+      type: MediaType.photo,
+      sourcePath: outPath,
+      title: 'إطار مجمد',
+      photoDuration: 1,
+      sourceDuration: 1,
+      hasAudio: false,
+      thumbPath: outPath,
+      filterPreset: clip.filterPreset,
+      filterIntensity: clip.filterIntensity,
+      adjust: clip.adjust,
+    );
+    await insertClipAt(photo, i + 1);
+    return true;
+  }
+
+  /// استبدال مصدر المقطع بملف جديد مع الحفاظ على المكانه والتعديلات.
+  Future<bool> replaceClipSource(ClipItem clip, String newPath, String title) async {
+    final i = project.clips.indexOf(clip);
+    if (i < 0) return false;
+    pushUndo();
+    // فحص الملف الجديد
+    double? dur;
+    try {
+      final probe = await FFprobeKit.getMediaInformation(newPath);
+      final info = probe.getMediaInformation();
+      dur = double.tryParse(info?.getDuration() ?? '');
+    } catch (_) {}
+    if (dur == null || dur <= 0) return false;
+
+    final isVideo = !newPath.toLowerCase().endsWith(('.jpg')) &&
+        !newPath.toLowerCase().endsWith('.jpeg') &&
+        !newPath.toLowerCase().endsWith('.png') &&
+        !newPath.toLowerCase().endsWith('.webp');
+
+    final thumb = await ProjectsStore.makeThumb(newPath, maxHeight: 288);
+    final old = project.clips[i];
+    final replacement = ClipItem(
+      id: old.id,
+      type: isVideo ? MediaType.video : MediaType.photo,
+      sourcePath: newPath,
+      title: title,
+      inPoint: 0,
+      outPoint: isVideo ? dur : old.outPoint,
+      photoDuration: old.photoDuration,
+      speed: old.speed,
+      volume: old.volume,
+      muted: old.muted,
+      rotation: old.rotation,
+      flipH: old.flipH,
+      flipV: old.flipV,
+      crop: old.crop,
+      filterPreset: old.filterPreset,
+      filterIntensity: old.filterIntensity,
+      adjust: old.adjust,
+      transitionOutId: old.transitionOutId,
+      transitionDuration: old.transitionDuration,
+      sourceDuration: dur,
+      sourceSize: old.sourceSize,
+      hasAudio: isVideo,
+      thumbPath: thumb,
+    );
+    _controllers.remove(old.id)?.dispose();
+    project.clips[i] = replacement;
+    selectedClipId = replacement.id;
+    await _activateClip(i, autoplay: false);
+    _autosave();
+    notifyListeners();
+    return true;
   }
 
   void setAspect(AspectKind kind) {
@@ -589,17 +752,51 @@ class EditorState extends ChangeNotifier {
     // التراكات مستقلة عن المقاطع — لا شيء مطلوب حالياً
   }
 
-  // ── التراجع ──
+  // ── التراجع والإعادة ──
   final List<String> _undoStack = [];
+  final List<String> _redoStack = [];
+
+  /// بدء مجموعة تعديل (نستدعيها مرة عند بداية السحب وليس مع كل إطار).
+  void beginUndoGroup() => pushUndo();
 
   void pushUndo() {
     try {
       _undoStack.add(_encodeProject());
       if (_undoStack.length > 20) _undoStack.removeAt(0);
+      _redoStack.clear();
     } catch (_) {}
   }
 
   bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  Future<void> redo() async {
+    if (_redoStack.isEmpty) return;
+    final raw = _redoStack.removeLast();
+    try {
+      final restored = _decodeProject(raw);
+      if (restored != null) {
+        _undoStack.add(_encodeProject());
+        await pause();
+        project = restored;
+        selectedClipId = null;
+        selectedTextId = null;
+        selectedStickerId = null;
+        final ids = project.clips.map((c) => c.id).toSet();
+        _controllers.removeWhere((k, v) {
+          if (!ids.contains(k)) {
+            try { v.dispose(); } catch (_) {}
+            return true;
+          }
+          return false;
+        });
+        projectTime = projectTime.clamp(0, totalDuration).toDouble();
+        await _activateClip(clipIndexAt(projectTime), autoplay: false);
+        _autosave();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
 
   Future<void> undo() async {
     if (_undoStack.isEmpty) return;
@@ -607,6 +804,8 @@ class EditorState extends ChangeNotifier {
     try {
       final restored = _decodeProject(raw);
       if (restored != null) {
+        // الحالة الحالية تذهب لمكدس الإعادة
+        try { _redoStack.add(_encodeProject()); } catch (_) {}
         await pause();
         project = restored;
         selectedClipId = null;

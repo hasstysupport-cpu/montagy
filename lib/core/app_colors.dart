@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Montagy v2 — brand palette.
+/// Montagy v2.1 — brand palette.
 /// Dark: أزرق كهربائي على أسود عميق (CapCut-inspired premium dark).
-/// Light: ورقي دافئ + أبيض + حبر أزرق داكن.
+/// Light: أخضر فاخر على أبيض نقي (نظام "أخضر وأبيض").
+/// accentOf(context) يرجّع لون التمييز حسب الثيم الحالي.
 class AppColors {
   // ── الأساس ──
   static const Color blue = Color(0xFF2E7DFF);
@@ -10,11 +11,30 @@ class AppColors {
   static const Color cyan = Color(0xFF38BDF8);
   static const Color deepBlue = Color(0xFF1B4FD8);
 
+  static const Color green = Color(0xFF1FA855);      // أخضر رئيسي (الثيم الفاتح)
+  static const Color greenLight = Color(0xFF4ADE80);
+  static const Color greenDeep = Color(0xFF147A3D);
+  static const Color teal = Color(0xFF0D9488);
+
   static const LinearGradient brandGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [blue, cyan],
   );
+
+  static const LinearGradient greenGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [green, teal],
+  );
+
+  /// لون التمييز حسب الثيم: أزرق في الداكن، أخضر في الفاتح.
+  static Color accentOf(BuildContext c) =>
+      Theme.of(c).brightness == Brightness.dark ? blue : green;
+
+  /// تدرج التمييز حسب الثيم.
+  static LinearGradient accentGradientOf(BuildContext c) =>
+      Theme.of(c).brightness == Brightness.dark ? brandGradient : greenGradient;
 
   // ── الثيم الداكن: أزرق + أسود ──
   static const Color darkBg = Color(0xFF05070D);
@@ -24,13 +44,13 @@ class AppColors {
   static const Color darkText = Color(0xFFF2F6FF);
   static const Color darkTextDim = Color(0xFF8B97AD);
 
-  // ── الثيم الفاتح: ورقي + أبيض ──
-  static const Color lightBg = Color(0xFFF6F3EC);
+  // ── الثيم الفاتح: أخضر + أبيض ──
+  static const Color lightBg = Color(0xFFFBFDFB);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightSurfaceHi = Color(0xFFF0EDE5);
-  static const Color lightBorder = Color(0xFFE3DFD4);
-  static const Color lightText = Color(0xFF141A26);
-  static const Color lightTextDim = Color(0xFF6B7280);
+  static const Color lightSurfaceHi = Color(0xFFF0F5F0);
+  static const Color lightBorder = Color(0xFFDCE6DC);
+  static const Color lightText = Color(0xFF0E1A12);
+  static const Color lightTextDim = Color(0xFF64746A);
 
   // ── ألوان وظيفية ──
   static const Color danger = Color(0xFFFF4D5E);
@@ -66,4 +86,10 @@ extension ColorX on Color {
         (green * (1 - amount)).round(),
         (blue * (1 - amount)).round(),
       );
+}
+
+/// وصول سريع للون التمييز من أي BuildContext.
+extension AccentContextX on BuildContext {
+  Color get accent => AppColors.accentOf(this);
+  LinearGradient get accentGradient => AppColors.accentGradientOf(this);
 }

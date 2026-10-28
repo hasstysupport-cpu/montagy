@@ -166,7 +166,7 @@ class _TextEditorPageState extends State<_TextEditorPage> {
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: sel
-                                ? AppColors.blue
+                                ? ctx.accent
                                 : (dark
                                     ? AppColors.darkBorder
                                     : AppColors.lightBorder),
@@ -182,7 +182,7 @@ class _TextEditorPageState extends State<_TextEditorPage> {
                                 style: TextStyle(
                                   fontFamily: f.family,
                                   fontSize: 20,
-                                  color: sel ? AppColors.blue : null,
+                                  color: sel ? ctx.accent : null,
                                   fontVariations: FontCatalog.staticFonts
                                           .contains(f.family)
                                       ? null
@@ -477,10 +477,10 @@ class _ToggleChip extends StatelessWidget {
     return FilterChip(
       label: Text(label),
       avatar: Icon(icon,
-          size: 16, color: selected ? Colors.white : AppColors.blue),
+          size: 16, color: selected ? Colors.white : context.accent),
       selected: selected,
       onSelected: (_) => onTap(),
-      selectedColor: AppColors.blue,
+      selectedColor: context.accent,
       showCheckmark: false,
       labelStyle: AppFont.w(600, size: 12,
           color: selected ? Colors.white : null),
@@ -522,10 +522,10 @@ class _TimeField extends StatelessWidget {
               children: [
                 Text(
                   S.durationLabel(value),
-                  style: AppFont.w(700, size: 14, color: AppColors.blue),
+                  style: AppFont.w(700, size: 14, color: context.accent),
                   textDirection: TextDirection.ltr,
                 ),
-                const Icon(Icons.my_location, size: 16, color: AppColors.blue),
+                Icon(Icons.my_location, size: 16, color: context.accent),
               ],
             ),
           ),

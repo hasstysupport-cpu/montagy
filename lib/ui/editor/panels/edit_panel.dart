@@ -256,7 +256,7 @@ class _ClipInfoBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.movie_outlined, size: 14, color: AppColors.blue),
+          Icon(Icons.movie_outlined, size: 14, color: context.accent),
           const SizedBox(width: 6),
           Expanded(
             child: Text(

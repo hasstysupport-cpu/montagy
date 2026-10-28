@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/app_colors.dart';
@@ -9,6 +10,7 @@ import '../../core/app_font.dart';
 import '../../core/strings.dart';
 import '../../data/models.dart';
 import '../../editor/editor_state.dart';
+import 'dialogs/text_edit_sheet.dart';
 import 'editor_screen.dart';
 
 /// منطقة المعاينة — فيديو/صورة + فلاتر + طبقات تفاعلية.
@@ -70,6 +72,8 @@ class PreviewView extends StatelessWidget {
                               painter: _VignettePainter(state.activeVignette(clip)),
                             ),
                           ),
+                        // خطوط التوسيط (دلائل التصاق)
+                        const _CenterGuides(),
                         const _OverlaysLayer(),
                         const _PlayButton(),
                         _ClipBadges(clip: clip),
@@ -106,7 +110,7 @@ class _EmptyPreview extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.blue.withValues(alpha: 0.4),
+                    color: context.accent.withValues(alpha: 0.4),
                     blurRadius: 30,
                   ),
                 ],
@@ -310,16 +314,19 @@ class _OverlaysLayer extends StatelessWidget {
               nx: t.nx,
               ny: t.ny,
               currentScale: t.scale,
+              currentRotation: t.rotation,
               selected: state.selectedTextId == t.id,
               onSelect: () => state.selectText(t.id),
               onMove: (nx, ny) => state.updateText(t
                 ..nx = nx.clamp(0.02, 0.98)
                 ..ny = ny.clamp(0.02, 0.98)),
               onScale: (s) => state.updateText(t..scale = s.clamp(0.2, 6)),
+              onRotate: (deg) => state.updateText(t..rotation = deg.clamp(-180, 180)),
               child: Transform.rotate(
                 angle: -t.rotation * math.pi / 180,
                 child: _textContent(t, box.maxHeight),
               ),
+              onEdit: () => showTextEditSheet(context, t),
             ),
           for (final s in stickers)
             _OverlayGesture(
@@ -327,12 +334,14 @@ class _OverlaysLayer extends StatelessWidget {
               nx: s.nx,
               ny: s.ny,
               currentScale: s.scale,
+              currentRotation: s.rotation,
               selected: state.selectedStickerId == s.id,
               onSelect: () => state.selectSticker(s.id),
               onMove: (nx, ny) => state.updateSticker(s
                 ..nx = nx.clamp(0.02, 0.98)
                 ..ny = ny.clamp(0.02, 0.98)),
               onScale: (sc) => state.updateSticker(s..scale = sc.clamp(0.02, 2)),
+              onRotate: (deg) => state.updateSticker(s..rotation = deg.clamp(-180, 180)),
               child: Transform.rotate(
                 angle: -s.rotation * math.pi / 180,
                 child: Opacity(
@@ -432,14 +441,18 @@ class _OverlaysLayer extends StatelessWidget {
   }
 }
 
-/// جسد الإيماءات المشترك للطبقات.
+/// جسد الإيماءات المشترك للطبقات — نمط CapCut/InShot:
+/// إصبع واحد = تحريك | قرص = تكبير | لف إصبعين = تدوير | التصاق بخطوط التوسيط.
 class _OverlayGesture extends StatefulWidget {
   final double nx, ny;
   final double currentScale;
+  final double currentRotation;
   final bool selected;
   final VoidCallback onSelect;
   final void Function(double nx, double ny) onMove;
   final ValueChanged<double> onScale;
+  final ValueChanged<double> onRotate;
+  final VoidCallback? onEdit;
   final Widget child;
 
   const _OverlayGesture({
@@ -447,11 +460,14 @@ class _OverlayGesture extends StatefulWidget {
     required this.nx,
     required this.ny,
     required this.currentScale,
+    required this.currentRotation,
     required this.selected,
     required this.onSelect,
     required this.onMove,
     required this.onScale,
+    required this.onRotate,
     required this.child,
+    this.onEdit,
   });
 
   @override
@@ -460,50 +476,244 @@ class _OverlayGesture extends StatefulWidget {
 
 class _OverlayGestureState extends State<_OverlayGesture> {
   double _gestureBaseScale = 1;
+  double _startRotation = 0;
   double _startNx = 0.5, _startNy = 0.5;
   Offset _startFocal = Offset.zero;
+  bool _snappedX = false;
+  bool _snappedY = false;
 
   @override
   Widget build(BuildContext context) {
+    final accent = context.accent;
+
     return Positioned.fill(
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: widget.onSelect,
-        onScaleStart: (d) {
-          _gestureBaseScale = widget.currentScale;
-          _startNx = widget.nx;
-          _startNy = widget.ny;
-          _startFocal = d.localFocalPoint;
-          widget.onSelect();
-        },
-        onScaleUpdate: (d) {
-          final box = context.size;
-          if (box == null) return;
-          if (d.pointerCount >= 2 && d.scale > 0.01) {
-            widget.onScale(_gestureBaseScale * d.scale);
-          }
-          final nx =
-              _startNx + (d.localFocalPoint.dx - _startFocal.dx) / box.width;
-          final ny =
-              _startNy + (d.localFocalPoint.dy - _startFocal.dy) / box.height;
-          widget.onMove(nx, ny);
-        },
-        child: Align(
-          alignment: Alignment(widget.nx * 2 - 1, widget.ny * 2 - 1),
-          child: Container(
-            decoration: widget.selected
-                ? BoxDecoration(
-                    border: Border.all(color: AppColors.cyan, width: 1.6),
-                    borderRadius: BorderRadius.circular(6),
-                  )
-                : null,
-            padding: widget.selected ? const EdgeInsets.all(5) : EdgeInsets.zero,
+      child: Align(
+        alignment: Alignment(widget.nx * 2 - 1, widget.ny * 2 - 1),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onSelect,
+          onScaleStart: (d) {
+            widget.onSelect();
+            _gestureBaseScale = widget.currentScale;
+            _startRotation = widget.currentRotation;
+            _startNx = widget.nx;
+            _startNy = widget.ny;
+            _startFocal = d.localFocalPoint;
+            _snappedX = false;
+            _snappedY = false;
+          },
+          onScaleUpdate: (d) {
+            final box = context.size;
+            if (box == null) return;
+
+            // تكبير بالقرص
+            if (d.pointerCount >= 2 && d.scale > 0.01) {
+              widget.onScale(_gestureBaseScale * d.scale);
+              // تدوير بلف الإصبعين
+              final degDelta = -d.rotation * 180 / math.pi;
+              if (d.rotation.abs() > 0.01) {
+                widget.onRotate(_startRotation + degDelta);
+              }
+            }
+
+            // تحريك بالإصبع مع التصاق مركزي
+            var nx =
+                _startNx + (d.localFocalPoint.dx - _startFocal.dx) / box.width;
+            var ny =
+                _startNy + (d.localFocalPoint.dy - _startFocal.dy) / box.height;
+
+            const snapT = 0.014;
+            var didSnap = false;
+            if ((nx - 0.5).abs() < snapT) {
+              nx = 0.5;
+              didSnap = true;
+            }
+            if ((ny - 0.5).abs() < snapT) {
+              ny = 0.5;
+              didSnap = true;
+            }
+            if (didSnap && (!_snappedX && nx == 0.5 || !_snappedY && ny == 0.5)) {
+              HapticFeedback.selectionClick();
+            }
+            _snappedX = nx == 0.5;
+            _snappedY = ny == 0.5;
+
+            widget.onMove(nx, ny);
+          },
+          child: _SelectionFrame(
+            selected: widget.selected,
+            accent: accent,
+            onEdit: widget.onEdit,
             child: widget.child,
           ),
         ),
       ),
     );
   }
+}
+
+/// إطار التحديد + أزرار الزوايا (حذف/تحرير) — نمط InShot.
+class _SelectionFrame extends StatelessWidget {
+  final bool selected;
+  final Color accent;
+  final VoidCallback? onEdit;
+  final Widget child;
+
+  const _SelectionFrame({
+    required this.selected,
+    required this.accent,
+    required this.child,
+    this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!selected) return child;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white, width: 1.6),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+          child: child,
+        ),
+        // زر الحذف — أعلى اليسار
+        Positioned(
+          left: -4,
+          top: -4,
+          child: _CornerButton(
+            icon: Icons.close,
+            onTap: () => EditorScope.of(context).clearSelection(),
+            onTapDelete: () {
+              final state = EditorScope.of(context);
+              final t = state.selectedText;
+              if (t != null) {
+                state.deleteText(t);
+                return;
+              }
+              final s = state.selectedSticker;
+              if (s != null) state.deleteSticker(s);
+            },
+          ),
+        ),
+        // زر التحرير — أسفل اليمين (نصوص فقط)
+        if (onEdit != null)
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: _CornerButton(
+              icon: Icons.edit_outlined,
+              onTap: onEdit,
+              onTapDelete: null,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// زر زاوية دائري صغير (حذف/تحرير فوق حدود العنصر).
+class _CornerButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final VoidCallback? onTapDelete;
+
+  const _CornerButton({required this.icon, this.onTap, this.onTapDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTapDelete ?? onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: onTapDelete != null ? AppColors.danger : Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 6,
+            ),
+          ],
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: onTapDelete != null ? Colors.white : Colors.black87,
+        ),
+      ),
+    );
+  }
+}
+
+/// خطوط التوسيط — تظهر عند التصاق الطبقة بمركز الكانفس.
+class _CenterGuides extends StatelessWidget {
+  const _CenterGuides();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = EditorScope.of(context);
+    return ListenableBuilder(
+      listenable: state,
+      builder: (ctx, _) {
+        var showV = false;
+        var showH = false;
+        final t = state.selectedText;
+        if (t != null) {
+          showV = (t.nx - 0.5).abs() < 0.004;
+          showH = (t.ny - 0.5).abs() < 0.004;
+        } else {
+          final s = state.selectedSticker;
+          if (s != null) {
+            showV = (s.nx - 0.5).abs() < 0.004;
+            showH = (s.ny - 0.5).abs() < 0.004;
+          }
+        }
+        if (!showV && !showH) return const SizedBox.shrink();
+        return IgnorePointer(
+          child: CustomPaint(
+            painter: _GuidesPainter(showV: showV, showH: showH),
+            child: const SizedBox.expand(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GuidesPainter extends CustomPainter {
+  final bool showV, showH;
+  _GuidesPainter({required this.showV, required this.showH});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.85)
+      ..strokeWidth = 1.2;
+    if (showV) {
+      canvas.drawLine(Offset(size.width / 2, 0),
+          Offset(size.width / 2, size.height), paint);
+    }
+    if (showH) {
+      canvas.drawLine(Offset(0, size.height / 2),
+          Offset(size.width, size.height / 2), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GuidesPainter old) =>
+      old.showV != showV || old.showH != showH;
 }
 
 /// زر تشغيل مركزي.

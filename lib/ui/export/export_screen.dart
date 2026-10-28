@@ -165,8 +165,8 @@ class _ExportScreenState extends State<ExportScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.movie_creation_outlined,
-                    color: AppColors.blue, size: 30),
+                Icon(Icons.movie_creation_outlined,
+                    color: context.accent, size: 30),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -282,7 +282,7 @@ class _ExportScreenState extends State<ExportScreen> {
                         dark ? AppColors.darkBorder : AppColors.lightBorder,
                   ),
                 ),
-                AppFont.w(900, size: 26, color: AppColors.blue)
+                AppFont.w(900, size: 26, color: context.accent)
                     .make('${(_progress * 100).round()}%'),
               ],
             ),
@@ -471,14 +471,14 @@ class _ChipRow<T> extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 11),
                 decoration: BoxDecoration(
                   color: v == value
-                      ? AppColors.blue
+                      ? context.accent
                       : (dark
                           ? AppColors.darkSurfaceHi
                           : AppColors.lightSurfaceHi),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color:
-                        v == value ? AppColors.blue : Colors.transparent,
+                        v == value ? context.accent : Colors.transparent,
                     width: 1.6,
                   ),
                 ),

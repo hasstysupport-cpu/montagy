@@ -47,7 +47,7 @@ class FilterPanel extends StatelessWidget {
               TextButton(
                 onPressed: () => state.applyFilterToAll(
                     clip.filterPreset, clip.filterIntensity),
-                child: AppFont.w(700, size: 11.5, color: AppColors.blue)
+                child: AppFont.w(700, size: 11.5, color: context.accent)
                     .make(S.applyToAll),
               ),
             ],
@@ -125,7 +125,7 @@ class _FilterThumb extends StatelessWidget {
                 color: dark ? AppColors.darkSurfaceHi : AppColors.lightSurfaceHi,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: selected ? AppColors.blue : Colors.transparent,
+                  color: selected ? context.accent : Colors.transparent,
                   width: 2.4,
                 ),
               ),
@@ -155,7 +155,7 @@ class _FilterThumb extends StatelessWidget {
             Text(
               name,
               style: AppFont.w(selected ? 700 : 500, size: 10,
-                  color: selected ? AppColors.blue : null),
+                  color: selected ? context.accent : null),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

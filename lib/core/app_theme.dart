@@ -132,10 +132,13 @@ class AppTheme {
   }
 
   static ThemeData light() {
+    // الثيم الفاتح: أخضر + أبيض
+    const a = AppColors.green;
     final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.blue,
+      seedColor: a,
       brightness: Brightness.light,
     ).copyWith(
+      primary: a,
       surface: AppColors.lightSurface,
       surfaceContainerHighest: AppColors.lightSurfaceHi,
     );
@@ -170,17 +173,16 @@ class AppTheme {
         ),
       ),
       dividerColor: AppColors.lightBorder,
-      splashColor: AppColors.blue.withValues(alpha: 0.10),
-      highlightColor: AppColors.blue.withValues(alpha: 0.06),
+      splashColor: a.withValues(alpha: 0.10),
+      highlightColor: a.withValues(alpha: 0.06),
       sliderTheme: SliderThemeData(
-        activeTrackColor: AppColors.blue,
+        activeTrackColor: a,
         inactiveTrackColor: AppColors.lightBorder,
         thumbColor: Colors.white,
-        overlayColor: AppColors.blue.withValues(alpha: 0.12),
+        overlayColor: a.withValues(alpha: 0.12),
         trackHeight: 3,
       ),
-      progressIndicatorTheme:
-          const ProgressIndicatorThemeData(color: AppColors.blue),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: a),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.lightText,
         contentTextStyle: AppFont.w(500, size: 14, color: Colors.white),
@@ -194,7 +196,7 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.blue,
+          backgroundColor: a,
           foregroundColor: Colors.white,
           textStyle: AppFont.w(700, size: 15),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
@@ -203,7 +205,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.blue,
+          foregroundColor: a,
           side: const BorderSide(color: AppColors.lightBorder, width: 1.4),
           textStyle: AppFont.w(600, size: 14),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -212,14 +214,14 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.blue,
+          foregroundColor: a,
           textStyle: AppFont.w(600, size: 14),
         ),
       ),
       textSelectionTheme: TextSelectionThemeData(
-        cursorColor: AppColors.blue,
-        selectionColor: AppColors.blue.withValues(alpha: 0.28),
-        selectionHandleColor: AppColors.blue,
+        cursorColor: a,
+        selectionColor: a.withValues(alpha: 0.28),
+        selectionHandleColor: a,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -232,28 +234,28 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.blue, width: 1.6),
+          borderSide: const BorderSide(color: AppColors.green, width: 1.6),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.lightSurfaceHi,
-        selectedColor: AppColors.blue,
+        selectedColor: a,
         labelStyle: AppFont.w(600, size: 13, color: AppColors.lightText),
         side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       tabBarTheme: TabBarTheme(
-        labelColor: AppColors.blue,
+        labelColor: a,
         unselectedLabelColor: AppColors.lightTextDim,
         labelStyle: AppFont.w(700, size: 14),
         unselectedLabelStyle: AppFont.w(500, size: 14),
         dividerColor: Colors.transparent,
-        indicatorColor: AppColors.blue,
+        indicatorColor: a,
       ),
       listTileTheme: ListTileThemeData(
         textColor: AppColors.lightText,
-        iconColor: AppColors.blue,
+        iconColor: a,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );

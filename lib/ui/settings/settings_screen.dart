@@ -84,14 +84,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       decoration: BoxDecoration(
                         color: widget.themeMode == mode
-                            ? AppColors.blue
+                            ? context.accent
                             : (dark
                                 ? AppColors.darkSurface
                                 : AppColors.lightSurface),
                         borderRadius: BorderRadius.circular(13),
                         border: Border.all(
                           color: widget.themeMode == mode
-                              ? AppColors.blue
+                              ? context.accent
                               : (dark
                                   ? AppColors.darkBorder
                                   : AppColors.lightBorder),
@@ -179,7 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             width: 4,
             height: 16,
             decoration: BoxDecoration(
-              gradient: AppColors.brandGradient,
+              gradient: context.accentGradient,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

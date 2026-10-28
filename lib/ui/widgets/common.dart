@@ -25,11 +25,12 @@ class ToolButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = context.accent;
     final dim = dark ? AppColors.darkTextDim : AppColors.lightTextDim;
     final color = danger
         ? AppColors.danger
         : active
-            ? AppColors.blue
+            ? accent
             : enabled
                 ? (dark ? AppColors.darkText : AppColors.lightText)
                 : dim;
@@ -50,7 +51,7 @@ class ToolButton extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     color: active
-                        ? AppColors.blue.withValues(alpha: 0.15)
+                        ? accent.withValues(alpha: 0.15)
                         : (dark
                             ? AppColors.darkSurfaceHi
                             : AppColors.lightSurfaceHi),
@@ -117,7 +118,7 @@ class LabeledSlider extends StatelessWidget {
           width: 52,
           child: Text(
             display?.call(value) ?? value.toStringAsFixed(1),
-            style: AppFont.w(600, size: 11, color: AppColors.blue),
+            style: AppFont.w(600, size: 11, color: context.accent),
             textAlign: TextAlign.start,
             textDirection: TextDirection.ltr,
           ),
@@ -156,7 +157,7 @@ class ChoiceChips<T> extends StatelessWidget {
             onSelected: (_) => onChanged(options[i].$1),
             labelStyle: AppFont.w(selected ? 700 : 500,
                 size: 12, color: selected ? Colors.white : null),
-            selectedColor: AppColors.blue,
+            selectedColor: context.accent,
             backgroundColor:
                 dark ? AppColors.darkSurfaceHi : AppColors.lightSurfaceHi,
             showCheckmark: false,
