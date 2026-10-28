@@ -47,6 +47,117 @@ enum TextAnim { none, fade, slideUp, slideDown, slideLeft, slideRight }
 
 enum AudioKind { music, voice, extracted }
 
+/// إطار مفتاحي للطبقات (نص/ملصق/فيديو) — نمط CapCut.
+class OvKeyframe {
+  double t;          // ثانية على التايم لاين
+  double nx, ny;     // الموضع 0..1
+  double scale;
+  double opacity;
+  double rotation;   // درجات
+
+  OvKeyframe({
+    required this.t,
+    this.nx = 0.5,
+    this.ny = 0.5,
+    this.scale = 1,
+    this.opacity = 1,
+    this.rotation = 0,
+  });
+
+  Map<String, dynamic> toJson() => {
+        't': t, 'nx': nx, 'ny': ny, 's': scale, 'o': opacity, 'r': rotation,
+      };
+
+  static OvKeyframe fromJson(Map<String, dynamic> j) => OvKeyframe(
+        t: (j['t'] ?? 0).toDouble(),
+        nx: (j['nx'] ?? 0.5).toDouble(),
+        ny: (j['ny'] ?? 0.5).toDouble(),
+        scale: (j['s'] ?? 1).toDouble(),
+        opacity: (j['o'] ?? 1).toDouble(),
+        rotation: (j['r'] ?? 0).toDouble(),
+      );
+
+  OvKeyframe clone() => OvKeyframe(
+      t: t, nx: nx, ny: ny, scale: scale, opacity: opacity, rotation: rotation);
+
+  /// استيفاء خطي بين الإطارات عند زمن معين.
+  static OvKeyframe? interpolate(List<OvKeyframe> kfs, double t) {
+    if (kfs.isEmpty) return null;
+    if (kfs.length == 1 || t <= kfs.first.t) {
+      final k = kfs.first;
+      return OvKeyframe(
+          t: t,
+          nx: k.nx,
+          ny: k.ny,
+          scale: k.scale,
+          opacity: k.opacity,
+          rotation: k.rotation);
+    }
+    if (t >= kfs.last.t) {
+      final k = kfs.last;
+      return OvKeyframe(
+          t: t,
+          nx: k.nx,
+          ny: k.ny,
+          scale: k.scale,
+          opacity: k.opacity,
+          rotation: k.rotation);
+    }
+    for (var i = 0; i < kfs.length - 1; i++) {
+      final a = kfs[i], b = kfs[i + 1];
+      if (t >= a.t && t <= b.t) {
+        final f = (b.t - a.t) <= 0.0001 ? 0.0 : (t - a.t) / (b.t - a.t);
+        double lerp(double x, double y) => x + (y - x) * f;
+        return OvKeyframe(
+          t: t,
+          nx: lerp(a.nx, b.nx),
+          ny: lerp(a.ny, b.ny),
+          scale: lerp(a.scale, b.scale),
+          opacity: lerp(a.opacity, b.opacity),
+          rotation: lerp(a.rotation, b.rotation),
+        );
+      }
+    }
+    final k = kfs.last;
+    return OvKeyframe(
+        t: t,
+        nx: k.nx,
+        ny: k.ny,
+        scale: k.scale,
+        opacity: k.opacity,
+        rotation: k.rotation);
+  }
+
+  /// تعبير FFmpeg لتعبير x/y مع استيفاء خطي بين الإطارات.
+  /// يُبنى كسلسلة if متداخلة: if(lt(t,t1), lerp01, if(lt(t,t2), lerp12, ...)).
+  static String ffExpr(List<OvKeyframe> kfs, double Function(OvKeyframe) get,
+      {String unit = ''}) {
+    String val(double v) =>
+        unit.isEmpty ? _n(v) : '(${_n(v)}${unit == 'W' ? '*W' : '*H'})';
+    String vAt(OvKeyframe k) =>
+        unit.isEmpty ? _n(get(k)) : '(${_n(get(k))}*${unit})';
+    if (kfs.isEmpty) return val(0.5);
+    if (kfs.length == 1) return vAt(kfs.first);
+    var expr = vAt(kfs.last);
+    for (var i = kfs.length - 2; i >= 0; i--) {
+      final a = kfs[i], b = kfs[i + 1];
+      final fa = get(a), fb = get(b);
+      final lerp =
+          unit.isEmpty
+              ? '(${_n(fa)}+(${_n(fb - fa)})*(t-${_n(a.t)}))'
+              : '((${_n(fa)}+(${_n(fb - fa)})*(t-${_n(a.t)}))*${unit})';
+      expr = 'if(lt(t,${_n(b.t)}),$lerp,$expr)';
+    }
+    return expr;
+  }
+
+  static String _n(double v) {
+    var s = v.toStringAsFixed(4);
+    s = s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    return s.isEmpty || s == '-' ? '0' : s;
+  }
+}
+
 /// بارامترات التدرج اللوني — كلها 0 = بلا تغيير (ما عدا ما يُذكر).
 class ColorParams {
   final double brightness;   // -1..1
@@ -119,6 +230,9 @@ class ClipItem {
   double filterIntensity; // 0..1
   ColorParams adjust;
 
+  /// مؤثرات المقطع: id → شدة 0..1 (نمط CapCut).
+  Map<String, double> effects;
+
   String? transitionOutId;    // الانتقال للمقطع التالي
   double transitionDuration;
 
@@ -147,13 +261,15 @@ class ClipItem {
     this.filterPreset,
     this.filterIntensity = 1,
     ColorParams? adjust,
+    Map<String, double>? effects,
     this.transitionOutId,
     this.transitionDuration = 0.5,
     this.sourceDuration = 0,
     this.sourceSize = Size.zero,
     this.hasAudio = true,
     this.thumbPath,
-  }) : adjust = adjust ?? ColorParams.neutral();
+  })  : adjust = adjust ?? ColorParams.neutral(),
+        effects = effects ?? {};
 
   /// مدة المقطع على التايم لاين (بالثواني).
   double get timelineDuration {
@@ -183,6 +299,7 @@ class ClipItem {
     bool clearFilter = false,
     double? filterIntensity,
     ColorParams? adjust,
+    Map<String, double>? effects,
     String? transitionOutId,
     bool clearTransition = false,
     double? transitionDuration,
@@ -206,6 +323,7 @@ class ClipItem {
         filterPreset: clearFilter ? null : (filterPreset ?? this.filterPreset),
         filterIntensity: filterIntensity ?? this.filterIntensity,
         adjust: adjust ?? this.adjust,
+        effects: effects != null ? Map<String, double>.of(effects) : this.effects,
         transitionOutId:
             clearTransition ? null : (transitionOutId ?? this.transitionOutId),
         transitionDuration: transitionDuration ?? this.transitionDuration,
@@ -223,6 +341,7 @@ class ClipItem {
         'crop': crop == null ? null : [crop!.left, crop!.top, crop!.width, crop!.height],
         'fp': filterPreset, 'fi': filterIntensity,
         'adj': _paramsToJson(adjust),
+        'fx': effects,
         'tr': transitionOutId, 'trd': transitionDuration,
         'sd': sourceDuration, 'sw': sourceSize.width, 'sh': sourceSize.height,
         'au': hasAudio, 'thumb': thumbPath,
@@ -249,6 +368,10 @@ class ClipItem {
       filterPreset: j['fp'],
       filterIntensity: (j['fi'] ?? 1).toDouble(),
       adjust: _paramsFromJson(j['adj']),
+      effects: j['fx'] == null
+          ? {}
+          : (j['fx'] as Map).map((k, v) =>
+              MapEntry(k.toString(), (v as num).toDouble())),
       transitionOutId: j['tr'],
       transitionDuration: (j['trd'] ?? 0.5).toDouble(),
       sourceDuration: (j['sd'] ?? 0).toDouble(),
@@ -299,6 +422,9 @@ class TextOverlay {
   TextAnim animIn, animOut;
   double animDur;
 
+  /// الإطارات المفتاحية (اختياري).
+  List<OvKeyframe> keyframes;
+
   TextOverlay({
     required this.id,
     this.text = '',
@@ -322,7 +448,22 @@ class TextOverlay {
     this.animIn = TextAnim.fade,
     this.animOut = TextAnim.fade,
     this.animDur = 0.4,
-  });
+    List<OvKeyframe>? keyframes,
+  }) : keyframes = keyframes ?? [];
+
+  /// الخصائص الفعالة عند زمن معين (مع الإطارات المفتاحية).
+  ({double nx, double ny, double scale, double rotation, double opacity})
+      resolvedAt(double t) {
+    if (keyframes.length < 2) {
+      return (nx: nx, ny: ny, scale: scale, rotation: rotation, opacity: 1);
+    }
+    final k = OvKeyframe.interpolate(keyframes, t);
+    if (k == null) {
+      return (nx: nx, ny: ny, scale: scale, rotation: rotation, opacity: 1);
+    }
+    return (
+      nx: k.nx, ny: k.ny, scale: k.scale, rotation: k.rotation, opacity: k.opacity);
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id, 't': text, 'f': fontFamily, 'fs': fontSize,
@@ -331,6 +472,7 @@ class TextOverlay {
         'st': hasStroke, 'sc': strokeColor.value, 'sw': strokeWidth,
         'sh': hasShadow, 'rot': rotation, 'nx': nx, 'ny': ny, 'sc2': scale,
         's': start, 'e': end, 'ai': animIn.name, 'ao': animOut.name, 'ad': animDur,
+        'kf': keyframes.map((e) => e.toJson()).toList(),
       };
 
   static TextOverlay fromJson(Map<String, dynamic> j) => TextOverlay(
@@ -358,14 +500,26 @@ class TextOverlay {
         animOut: TextAnim.values.firstWhere(
             (e) => e.name == j['ao'], orElse: () => TextAnim.fade),
         animDur: (j['ad'] ?? 0.4).toDouble(),
+        keyframes: j['kf'] == null
+            ? []
+            : ((j['kf'] as List)
+                .map((e) => OvKeyframe.fromJson(Map<String, dynamic>.from(e)))
+                .toList()),
       );
 }
 
-/// ملصق (إيموجي أو صورة).
+/// ملصق (إيموجي أو صورة) أو طبقة فيديو PiP.
 class ImageOverlay {
   final String id;
   final String? emoji;
   final String? imagePath;
+  // طبقة فيديو (PiP) — نمط CapCut "Overlay"
+  final String? videoPath;
+  double videoInPoint;   // داخل ملف الفيديو
+  double videoSpeed;
+  double videoVolume;
+  bool videoMuted;
+
   double nx, ny;
   double scale;      // نسبة من ارتفاع الفيديو (0.03..1)
   double rotation;   // درجات
@@ -374,10 +528,20 @@ class ImageOverlay {
   TextAnim animIn, animOut;
   double animDur;
 
+  /// الإطارات المفتاحية (فارغة = الخصائص الأساسية ثابتة).
+  List<OvKeyframe> keyframes;
+
+  bool get isVideoLayer => videoPath != null;
+
   ImageOverlay({
     required this.id,
     this.emoji,
     this.imagePath,
+    this.videoPath,
+    this.videoInPoint = 0,
+    this.videoSpeed = 1,
+    this.videoVolume = 1,
+    this.videoMuted = false,
     this.nx = 0.5,
     this.ny = 0.5,
     this.scale = 0.18,
@@ -388,18 +552,44 @@ class ImageOverlay {
     this.animIn = TextAnim.fade,
     this.animOut = TextAnim.fade,
     this.animDur = 0.3,
-  }) : assert(emoji != null || imagePath != null);
+    List<OvKeyframe>? keyframes,
+  })  : assert(emoji != null || imagePath != null || videoPath != null),
+        keyframes = keyframes ?? [];
+
+  /// الخصائص الفعالة عند زمن معين (مع الإطارات المفتاحية).
+  ({double nx, double ny, double scale, double opacity, double rotation})
+      resolvedAt(double t) {
+    if (keyframes.length < 2) {
+      return (
+        nx: nx, ny: ny, scale: scale, opacity: opacity, rotation: rotation);
+    }
+    final k = OvKeyframe.interpolate(keyframes, t);
+    if (k == null) {
+      return (
+        nx: nx, ny: ny, scale: scale, opacity: opacity, rotation: rotation);
+    }
+    return (
+      nx: k.nx, ny: k.ny, scale: k.scale, opacity: k.opacity, rotation: k.rotation);
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id, 'em': emoji, 'im': imagePath,
+        'vp': videoPath, 'vi': videoInPoint, 'vs': videoSpeed,
+        'vv': videoVolume, 'vm': videoMuted,
         'nx': nx, 'ny': ny, 'sc': scale, 'rot': rotation, 'op': opacity,
         's': start, 'e': end, 'ai': animIn.name, 'ao': animOut.name, 'ad': animDur,
+        'kf': keyframes.map((e) => e.toJson()).toList(),
       };
 
   static ImageOverlay fromJson(Map<String, dynamic> j) => ImageOverlay(
         id: j['id'],
         emoji: j['em'],
         imagePath: j['im'],
+        videoPath: j['vp'],
+        videoInPoint: (j['vi'] ?? 0).toDouble(),
+        videoSpeed: (j['vs'] ?? 1).toDouble(),
+        videoVolume: (j['vv'] ?? 1).toDouble(),
+        videoMuted: j['vm'] ?? false,
         nx: (j['nx'] ?? 0.5).toDouble(),
         ny: (j['ny'] ?? 0.5).toDouble(),
         scale: (j['sc'] ?? 0.18).toDouble(),
@@ -412,6 +602,11 @@ class ImageOverlay {
         animOut: TextAnim.values.firstWhere(
             (e) => e.name == j['ao'], orElse: () => TextAnim.fade),
         animDur: (j['ad'] ?? 0.3).toDouble(),
+        keyframes: j['kf'] == null
+            ? []
+            : ((j['kf'] as List)
+                .map((e) => OvKeyframe.fromJson(Map<String, dynamic>.from(e)))
+                .toList()),
       );
 }
 

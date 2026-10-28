@@ -76,6 +76,8 @@ class S {
   static const String canvas = 'كانفس';
   static const String transitions = 'انتقالات';
   static const String effects = 'المؤثرات';
+  static const String overlay = 'طبقة';
+  static const String keyframe = 'مفتاح';
 
   // ── تعديل لوني ──
   static const String brightness = 'سطوع';

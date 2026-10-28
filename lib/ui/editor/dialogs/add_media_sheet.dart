@@ -6,7 +6,7 @@ import '../../../core/strings.dart';
 import '../../../services/projects_store.dart';
 import '../editor_screen.dart';
 
-/// شيت إضافة وسائط (فيديو / صور).
+/// شيت إضافة وسائط (فيديو / صور) — مع رسائل أخطاء واضحة.
 Future<void> showAddMediaSheet(BuildContext context) async {
   final state = EditorScope.of(context);
   final action = await showModalBottomSheet<String>(
@@ -38,27 +38,50 @@ Future<void> showAddMediaSheet(BuildContext context) async {
   );
   if (action == null || !context.mounted) return;
 
-  final result = await FilePicker.platform.pickFiles(
-    type: action == 'video' ? FileType.video : FileType.image,
-    allowMultiple: true,
-  );
-  if (result == null || result.paths.isEmpty) return;
-  final valid = result.paths.whereType<String>().toList();
-  if (valid.isEmpty) return;
+  List<String> paths;
+  try {
+    final result = await FilePicker.platform.pickFiles(
+      type: action == 'video' ? FileType.video : FileType.image,
+      allowMultiple: true,
+    );
+    if (result == null) return;
+    paths = result.paths.whereType<String>().toList();
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('تعذر فتح المعرض: $e'),
+        backgroundColor: Colors.red.withValues(alpha: 0.85),
+      ));
+    }
+    return;
+  }
+  if (paths.isEmpty) return;
 
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('جارٍ الاستيراد...'), duration: Duration(seconds: 1)),
+    const SnackBar(
+        content: Text('جارٍ الاستيراد...'), duration: Duration(seconds: 1)),
   );
 
-  final clips = await ProjectsStore.importFiles(valid);
+  final clips = await ProjectsStore.importFiles(paths);
   if (clips.isEmpty) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر استيراد الملفات')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'تعذر استيراد الملفات (${paths.length} ملف) — تأكد أن الفيديو بصيغة مدعومة (mp4/mov) ويحتوي مقطعاً صالحاً'),
+        backgroundColor: Colors.red.withValues(alpha: 0.85),
+        duration: const Duration(seconds: 3),
+      ));
     }
     return;
+  }
+  if (clips.length < paths.length) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('تم استيراد ${clips.length} من ${paths.length}'),
+        duration: const Duration(milliseconds: 1400),
+      ));
+    }
   }
   await state.addClips(clips);
 }

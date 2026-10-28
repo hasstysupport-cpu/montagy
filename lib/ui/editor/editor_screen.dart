@@ -7,6 +7,7 @@ import '../../core/app_font.dart';
 import '../../core/strings.dart';
 import '../../data/models.dart';
 import '../../editor/editor_state.dart';
+import '../widgets/common.dart' show PanelScroll, PanelHint;
 import '../export/export_screen.dart';
 import 'dialogs/add_media_sheet.dart';
 import 'dialogs/crop_screen.dart';
@@ -16,6 +17,7 @@ import 'panels/adjust_panel.dart';
 import 'panels/audio_panel.dart';
 import 'panels/canvas_panel.dart';
 import 'panels/edit_panel.dart';
+import 'panels/effects_panel.dart';
 import 'panels/filter_panel.dart';
 import 'panels/sticker_panel.dart';
 import 'panels/text_panel.dart';
@@ -27,10 +29,12 @@ import '../../services/projects_store.dart';
 /// تبويبات الأدوات الرئيسية — تظهر حين لا يوجد تحديد (نمط CapCut).
 const List<(IconData, String)> kEditorTabs = [
   (Icons.content_cut, S.tools),
+  (Icons.auto_awesome_outlined, S.filters),
+  (Icons.blur_on, S.effects),
   (Icons.music_note_outlined, S.audio),
   (Icons.text_fields, S.text),
   (Icons.emoji_emotions_outlined, S.sticker),
-  (Icons.auto_awesome_outlined, S.filters),
+  (Icons.layers_outlined, S.overlay),
   (Icons.tune, S.adjust),
   (Icons.crop_free, S.canvas),
   (Icons.swap_horiz, S.transitions),
@@ -59,11 +63,25 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     state = EditorState(widget.project);
+    state.addListener(_onStateChanged);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  void _onStateChanged() {
+    final err = state.lastError;
+    if (err == null || !mounted) return;
+    state.consumeError();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(err, style: AppFont.w(600, size: 12.5, color: Colors.white)),
+      backgroundColor: AppColors.danger.withValues(alpha: 0.92),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(milliseconds: 2200),
+    ));
   }
 
   @override
   void dispose() {
+    state.removeListener(_onStateChanged);
     state.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -448,6 +466,16 @@ class _TextToolsBar extends StatelessWidget {
           onTap: () => showTextEditSheet(context, text),
         ),
         _ToolDef(
+          Icons.videocam_outlined, S.keyframe,
+          active: text.keyframes.isNotEmpty,
+          onTap: () => state.addTextKeyframe(text),
+        ),
+        if (text.keyframes.isNotEmpty)
+          _ToolDef(
+            Icons.clear_all, 'مسح المفاتيح',
+            onTap: () => state.clearTextKeyframes(text),
+          ),
+        _ToolDef(
           Icons.copy_outlined, 'تكرار',
           onTap: () => state.duplicateText(text),
         ),
@@ -482,6 +510,16 @@ class _StickerToolsBar extends StatelessWidget {
       title: sticker.emoji ?? 'ملصق',
       subtitle: S.durationLabel(sticker.end - sticker.start),
       tools: [
+        _ToolDef(
+          Icons.videocam_outlined, S.keyframe,
+          active: sticker.keyframes.isNotEmpty,
+          onTap: () => state.addStickerKeyframe(sticker),
+        ),
+        if (sticker.keyframes.isNotEmpty)
+          _ToolDef(
+            Icons.clear_all, 'مسح المفاتيح',
+            onTap: () => state.clearStickerKeyframes(sticker),
+          ),
         _ToolDef(
           Icons.copy_outlined, 'تكرار',
           onTap: () {
@@ -674,13 +712,15 @@ Future<void> showToolSheet(BuildContext context, int index) async {
   String title;
   switch (index) {
     case 0: panel = const EditPanel(); title = S.tools; break;
-    case 1: panel = const AudioPanel(); title = S.audio; break;
-    case 2: panel = const TextPanel(); title = S.text; break;
-    case 3: panel = const StickerPanel(); title = S.sticker; break;
-    case 4: panel = const FilterPanel(); title = S.filters; break;
-    case 5: panel = const AdjustPanel(); title = S.adjust; break;
-    case 6: panel = const CanvasPanel(); title = S.canvas; break;
-    case 7: panel = const TransitionPanel(); title = S.transitions; break;
+    case 1: panel = const FilterPanel(); title = S.filters; break;
+    case 2: panel = const EffectsPanel(); title = S.effects; break;
+    case 3: panel = const AudioPanel(); title = S.audio; break;
+    case 4: panel = const TextPanel(); title = S.text; break;
+    case 5: panel = const StickerPanel(); title = S.sticker; break;
+    case 6: panel = const _OverlayPanel(); title = S.overlay; break;
+    case 7: panel = const AdjustPanel(); title = S.adjust; break;
+    case 8: panel = const CanvasPanel(); title = S.canvas; break;
+    case 9: panel = const TransitionPanel(); title = S.transitions; break;
     default: return;
   }
 
@@ -849,6 +889,91 @@ class CropRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       CropScreen(clip: clip);
+}
+
+/// لوحة الطبقات (PiP) — إضافة فيديو كطبقة فوقية قابلة للتحريك.
+class _OverlayPanel extends StatelessWidget {
+  const _OverlayPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = EditorScope.of(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final videoLayers =
+        state.project.overlays.where((s) => s.isVideoLayer).toList();
+
+    return PanelScroll(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: AppFont.w(600, size: 11.5,
+                        color: dark ? AppColors.darkTextDim : AppColors.lightTextDim)
+                    .make('أضف فيديو كطبقة فوقية (صورة داخل صورة) — حرّكها وكبّرها باللمس في المعاينة'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: FilledButton.icon(
+              onPressed: () => _pickOverlayVideo(context, state),
+              icon: const Icon(Icons.add_to_queue_outlined, size: 18),
+              label: AppFont.w(700, size: 12.5).make('اختر فيديو الطبقة'),
+            ),
+          ),
+          if (videoLayers.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            AppFont.w(700, size: 12, color: context.accent).make('الطبقات الحالية'),
+            const SizedBox(height: 6),
+            for (final l in videoLayers)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.layers_outlined,
+                    color: AppColors.blue, size: 20),
+                title: Text(
+                  'طبقة فيديو • ${l.end - l.start < 100 ? (l.end - l.start).toStringAsFixed(1) : '?'} ثانية',
+                  style: AppFont.w(600, size: 11.5),
+                ),
+                subtitle: Text(
+                  'يُحدد من ${l.start.toStringAsFixed(1)} إلى ${l.end.toStringAsFixed(1)}',
+                  style: AppFont.w(500, size: 10),
+                  textDirection: TextDirection.ltr,
+                ),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete_outline,
+                      size: 18, color: AppColors.danger),
+                  onPressed: () => state.deleteSticker(l),
+                ),
+                onTap: () => state.selectSticker(l.id),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickOverlayVideo(BuildContext context, EditorState state) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.video);
+    if (result == null || result.files.single.path == null) return;
+    final path = result.files.single.path!;
+    // نسخ الملف لمساحة المشروع
+    final copied = await ProjectsStore.importAsset(path);
+    if (copied == null) {
+      state.raiseError('تعذر استيراد ملف الطبقة');
+      return;
+    }
+    double dur = 3;
+    try {
+      final probe = await ProjectsStore.probeVideo(copied);
+      if (probe != null && probe.$1 > 0) dur = probe.$1;
+    } catch (_) {}
+    if (!context.mounted) return;
+    Navigator.of(context).pop(); // نغلق اللوحة ليتفاعل المستخدم مع المعاينة
+    await state.addVideoLayer(copied, dur);
+  }
 }
 
 /// زر التصدير — تدرج لوني حسب الثيم.

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -66,6 +67,7 @@ class PreviewView extends StatelessWidget {
                       children: [
                         _Background(clip: clip),
                         _ClipSurface(clip: clip, state: state),
+                        _EffectsLayer(clip: clip, state: state),
                         if (state.activeVignette(clip) > 0.01)
                           IgnorePointer(
                             child: CustomPaint(
@@ -329,44 +331,54 @@ class _OverlaysLayer extends StatelessWidget {
               onEdit: () => showTextEditSheet(context, t),
             ),
           for (final s in stickers)
-            _OverlayGesture(
-              key: ValueKey('stk_${s.id}'),
-              nx: s.nx,
-              ny: s.ny,
-              currentScale: s.scale,
-              currentRotation: s.rotation,
-              selected: state.selectedStickerId == s.id,
-              onSelect: () => state.selectSticker(s.id),
-              onMove: (nx, ny) => state.updateSticker(s
-                ..nx = nx.clamp(0.02, 0.98)
-                ..ny = ny.clamp(0.02, 0.98)),
-              onScale: (sc) => state.updateSticker(s..scale = sc.clamp(0.02, 2)),
-              onRotate: (deg) => state.updateSticker(s..rotation = deg.clamp(-180, 180)),
-              child: Transform.rotate(
-                angle: -s.rotation * math.pi / 180,
-                child: Opacity(
-                  opacity: s.opacity.clamp(0, 1),
-                  child: s.emoji != null
-                      ? Text(
-                          s.emoji!,
-                          style: TextStyle(
-                            fontSize: s.scale * box.maxHeight * 0.82,
-                            height: 1.05,
-                          ),
-                          textDirection: TextDirection.ltr,
-                        )
-                      : (s.imagePath != null &&
-                              File(s.imagePath!).existsSync()
-                          ? Image.file(
-                              File(s.imagePath!),
-                              height: s.scale * box.maxHeight,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            if (s.isVideoLayer)
+              _VideoLayerView(s: s)
+            else ...[
+              Builder(builder: (_) {
+                final rs = s.resolvedAt(state.projectTime);
+                return _OverlayGesture(
+                  key: ValueKey('stk_${s.id}'),
+                  nx: rs.nx,
+                  ny: rs.ny,
+                  currentScale: rs.scale,
+                  currentRotation: rs.rotation,
+                  selected: state.selectedStickerId == s.id,
+                  onSelect: () => state.selectSticker(s.id),
+                  onMove: (nx, ny) => state.updateSticker(s
+                    ..nx = nx.clamp(0.02, 0.98)
+                    ..ny = ny.clamp(0.02, 0.98)),
+                  onScale: (sc) =>
+                      state.updateSticker(s..scale = sc.clamp(0.02, 2)),
+                  onRotate: (deg) =>
+                      state.updateSticker(s..rotation = deg.clamp(-180, 180)),
+                  child: Transform.rotate(
+                    angle: -rs.rotation * math.pi / 180,
+                    child: Opacity(
+                      opacity: rs.opacity.clamp(0, 1),
+                      child: s.emoji != null
+                          ? Text(
+                              s.emoji!,
+                              style: TextStyle(
+                                fontSize: rs.scale * box.maxHeight * 0.82,
+                                height: 1.05,
+                              ),
+                              textDirection: TextDirection.ltr,
                             )
-                          : const SizedBox.shrink()),
-                ),
-              ),
-            ),
+                          : (s.imagePath != null &&
+                                  File(s.imagePath!).existsSync()
+                              ? Image.file(
+                                  File(s.imagePath!),
+                                  height: rs.scale * box.maxHeight,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox.shrink(),
+                                )
+                              : const SizedBox.shrink()),
+                    ),
+                  ),
+                );
+              }),
+            ],
         ],
       );
     });
@@ -439,6 +451,189 @@ class _OverlaysLayer extends StatelessWidget {
     }
     return text;
   }
+}
+
+/// طبقة فيديو PiP — مشغل حقيقي قابل للسحب والتحجيم والتدوير.
+class _VideoLayerView extends StatefulWidget {
+  final ImageOverlay s;
+  const _VideoLayerView({required this.s});
+
+  @override
+  State<_VideoLayerView> createState() => _VideoLayerViewState();
+}
+
+class _VideoLayerViewState extends State<_VideoLayerView> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = EditorScope.of(context);
+      state.ensureLayerController(widget.s);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = EditorScope.of(context);
+    final rs = widget.s.resolvedAt(state.projectTime);
+    final ctrl = state.layerControllerFor(widget.s);
+
+    Widget content;
+    if (ctrl != null && ctrl.value.isInitialized) {
+      final size = ctrl.value.size;
+      final aspect = size.aspectRatio == 0 ? 9 / 16 : size.aspectRatio;
+      content = AspectRatio(
+        aspectRatio: aspect,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: VideoPlayer(ctrl),
+        ),
+      );
+    } else {
+      content = Container(
+        width: 120,
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    return _OverlayGesture(
+      key: ValueKey('vid_${widget.s.id}'),
+      nx: rs.nx,
+      ny: rs.ny,
+      currentScale: rs.scale,
+      currentRotation: rs.rotation,
+      selected: state.selectedStickerId == widget.s.id,
+      onSelect: () => state.selectSticker(widget.s.id),
+      onMove: (nx, ny) => state.updateSticker(widget.s
+        ..nx = nx.clamp(0.02, 0.98)
+        ..ny = ny.clamp(0.02, 0.98)),
+      onScale: (sc) => state.updateSticker(widget.s..scale = sc.clamp(0.08, 1.2)),
+      onRotate: (deg) =>
+          state.updateSticker(widget.s..rotation = deg.clamp(-180, 180)),
+      child: Transform.rotate(
+        angle: -rs.rotation * math.pi / 180,
+        child: Opacity(
+          opacity: rs.opacity.clamp(0, 1),
+          child: content,
+        ),
+      ),
+    );
+  }
+}
+
+/// طبقة المعاينة للمؤثرات — تمثيل تقريبي فوري (التصدير يطبق السلسلة الحقيقية).
+class _EffectsLayer extends StatelessWidget {
+  final ClipItem clip;
+  final EditorState state;
+  const _EffectsLayer({required this.clip, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final fx = clip.effects;
+    if (fx.isEmpty) return const SizedBox.shrink();
+
+    final children = <Widget>[];
+
+    // ضبابي
+    final blur = (fx['softblur'] ?? 0) > 0.01
+        ? fx['softblur']!
+        : ((fx['deepblur'] ?? 0) > 0.01 ? 0.5 + fx['deepblur']! / 2 : 0.0);
+    if (blur > 0.01) {
+      children.add(IgnorePointer(
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(
+              sigmaX: 2 + blur * 10, sigmaY: 2 + blur * 10, tileMode: TileMode.clamp),
+          child: const SizedBox.expand(),
+        ),
+      ));
+    }
+
+    // حبيبات
+    if ((fx['grain'] ?? 0) > 0.01) {
+      children.add(IgnorePointer(
+        child: CustomPaint(
+          painter: _GrainPainter(strength: fx['grain']!),
+          child: const SizedBox.expand(),
+        ),
+      ));
+    }
+
+    // اهتزاز — يُطبق عبر Transform على المحتوى الكلي (تقريب)
+    // نون: تعديل ألوان بسيط
+    if ((fx['neon'] ?? 0) > 0.01) {
+      final s = fx['neon']!;
+      children.add(IgnorePointer(
+        child: Container(
+          color: Colors.white.withValues(alpha: 0.03 + 0.05 * s),
+          child: const SizedBox.expand(),
+        ),
+      ));
+    }
+
+    // توهج / حلمي
+    if ((fx['glow'] ?? 0) > 0.01 || (fx['dreamy'] ?? 0) > 0.01) {
+      final g = ((fx['glow'] ?? 0) + (fx['dreamy'] ?? 0)).clamp(0.0, 1.0);
+      children.add(IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              radius: 1.2,
+              colors: [
+                Colors.white.withValues(alpha: 0.06 + 0.12 * g),
+                Colors.transparent,
+              ],
+            ),
+          ),
+          child: const SizedBox.expand(),
+        ),
+      ));
+    }
+
+    if (children.isEmpty) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: Stack(fit: StackFit.expand, children: children),
+    );
+  }
+}
+
+/// رسام الحبيبات — نقاط شفافة عشوائية (تقريب للـ noise).
+class _GrainPainter extends CustomPainter {
+  final double strength;
+  _GrainPainter({required this.strength});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rnd = math.Random(7);
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.05 + 0.1 * strength);
+    final count = (120 + 260 * strength).round();
+    for (var i = 0; i < count; i++) {
+      final dx = rnd.nextDouble() * size.width;
+      final dy = rnd.nextDouble() * size.height;
+      canvas.drawRect(
+          Rect.fromLTWH(dx, dy, 1.2, 1.2),
+          Paint()
+            ..color = (i.isEven ? Colors.white : Colors.black)
+                .withValues(alpha: 0.04 + 0.09 * strength));
+    }
+    paint.color = Colors.transparent;
+  }
+
+  @override
+  bool shouldRepaint(covariant _GrainPainter old) => old.strength != strength;
 }
 
 /// جسد الإيماءات المشترك للطبقات — نمط CapCut/InShot:

@@ -52,21 +52,28 @@ class OverlayRenderer {
     return TextStyle(
       fontFamily: 'exp_${t.fontFamily}',
       fontSize: fontPx,
-      color: foreground == null ? t.color : null,
+      color: foreground == null ? t.color.withValues(alpha: t.color.a * _layerOpacity) : null,
       foreground: foreground,
       height: 1.25,
       shadows: t.hasShadow && foreground == null
-          ? [Shadow(color: Colors.black.withValues(alpha: 0.65), blurRadius: fontPx * 0.12, offset: Offset(0, fontPx * 0.045))]
+          ? [Shadow(color: Colors.black.withValues(alpha: 0.65 * _layerOpacity), blurRadius: fontPx * 0.12, offset: Offset(0, fontPx * 0.045))]
           : null,
       fontVariations: isVariable ? const [FontVariation('wght', 700)] : null,
     );
   }
 
-  /// يرسم طبقة نص إلى PNG.
+  /// شفافية الطبقة الحالية أثناء الرسم (للإطارات المفتاحية).
+  static double _layerOpacity = 1.0;
+
+  /// يرسم طبقة نص إلى PNG (مع شفافية اختيارية للإطارات المفتاحية).
   static Future<File> renderText(TextOverlay t,
-      {required int frameW, required int frameH, required String outPath}) async {
+      {required int frameW, required int frameH, required String outPath,
+      double opacity = 1.0, double? scaleOverride, double? rotationOverride}) async {
     await ensureFonts([t.fontFamily]);
-    final fontPx = (t.fontSize * frameH * t.scale).clamp(12, frameH * 0.9).toDouble();
+    _layerOpacity = opacity.clamp(0.0, 1.0);
+    final scale = scaleOverride ?? t.scale;
+    final rotation = rotationOverride ?? t.rotation;
+    final fontPx = (t.fontSize * frameH * scale).clamp(12, frameH * 0.9).toDouble();
     final align = t.textAlign == 0
         ? TextAlign.center
         : (t.textAlign == 1 ? TextAlign.right : TextAlign.left);
@@ -82,7 +89,7 @@ class OverlayRenderer {
     final contentH = tp.height + pad * 2;
 
     // حدود الدوران
-    final rad = t.rotation * math.pi / 180.0;
+    final rad = rotation * math.pi / 180.0;
     final cosA = math.cos(rad).abs(), sinA = math.sin(rad).abs();
     final outW = (contentW * cosA + contentH * sinA).ceil();
     final outH = (contentW * sinA + contentH * cosA).ceil();
@@ -98,7 +105,7 @@ class OverlayRenderer {
         Offset.zero & Size(contentW, contentH),
         Radius.circular(math.min(contentH * 0.28, fontPx * 0.4)),
       );
-      canvas.drawRRect(rrect, Paint()..color = t.bgColor.withValues(alpha: t.bgOpacity));
+      canvas.drawRRect(rrect, Paint()..color = t.bgColor.withValues(alpha: t.bgOpacity * _layerOpacity));
     }
     if (t.hasStroke) {
       final strokeTp = TextPainter(
@@ -119,12 +126,15 @@ class OverlayRenderer {
     tp.paint(canvas, Offset(pad, pad));
 
     final img = await recorder.endRecording().toImage(outW, outH);
+    _layerOpacity = 1.0;
     return _savePng(img, outPath);
   }
 
   /// يرسم ملصق إيموجي إلى PNG.
   static Future<File> renderEmoji(String emoji,
-      {required double relScale, required int frameH, required String outPath}) async {
+      {required double relScale, required int frameH, required String outPath,
+      double opacity = 1.0}) async {
+    _layerOpacity = opacity.clamp(0.0, 1.0);
     final fontPx = (relScale * frameH).clamp(16, frameH * 0.95).toDouble();
     final tp = TextPainter(
       text: TextSpan(
@@ -142,6 +152,7 @@ class OverlayRenderer {
     final canvas = Canvas(recorder);
     tp.paint(canvas, Offset(pad, pad));
     final img = await recorder.endRecording().toImage(w, h);
+    _layerOpacity = 1.0;
     return _savePng(img, outPath);
   }
 
@@ -150,7 +161,9 @@ class OverlayRenderer {
       {required double relScale,
       required int frameH,
       double rotationDeg = 0,
+      double opacity = 1.0,
       required String outPath}) async {
+    _layerOpacity = opacity.clamp(0.0, 1.0);
     final data = await File(imagePath).readAsBytes();
     final codec = await ui.instantiateImageCodec(data);
     final frame = await codec.getNextFrame();
@@ -172,8 +185,13 @@ class OverlayRenderer {
         center: Offset.zero, width: targetW.toDouble(), height: targetH.toDouble());
     final srcRect = Rect.fromLTWH(
         0, 0, src.width.toDouble(), src.height.toDouble());
-    canvas.drawImageRect(src, srcRect, dst, Paint()..filterQuality = FilterQuality.high);
+    final p = Paint()
+      ..filterQuality = FilterQuality.high
+      ..color = Colors.white.withValues(alpha: _layerOpacity)
+      ..blendMode = BlendMode.modulate;
+    canvas.drawImageRect(src, srcRect, dst, p);
     final img = await recorder.endRecording().toImage(outW, outH);
+    _layerOpacity = 1.0;
     return _savePng(img, outPath);
   }
 

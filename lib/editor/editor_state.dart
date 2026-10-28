@@ -8,9 +8,11 @@ import 'package:just_audio/just_audio.dart';
 import 'package:video_player/video_player.dart';
 
 import '../data/color_engine.dart';
+import '../data/effects_catalog.dart';
 import '../data/models.dart';
 import '../services/ffmpeg_gateway.dart';
 import '../services/projects_store.dart';
+import '../services/thumb_strip.dart';
 
 /// الحالة المركزية للمحرر — تشغيل + تعديلات + تايم لاين + صوت.
 class EditorState extends ChangeNotifier {
@@ -18,6 +20,202 @@ class EditorState extends ChangeNotifier {
 
   EditorState(this.project) {
     _initPlayback();
+    checkFfmpeg();
+  }
+
+  // ── رسائل الأخطاء المرئية (بدل الفشل الصامت) ──
+  String? lastError;
+
+  /// استدعِ عند أي فشل — الـ UI يعرضه في SnackBar.
+  void raiseError(String msg) {
+    lastError = msg;
+    debugPrint('[Montagy] $msg');
+    notifyListeners();
+  }
+
+  void consumeError() => lastError = null;
+
+  // ── فحص صحة FFmpeg ──
+  bool? _ffmpegOk;
+
+  bool? get ffmpegOk => _ffmpegOk;
+
+  Future<void> checkFfmpeg() async {
+    try {
+      final session = await FFmpegKit.executeWithArguments([
+        '-hide_banner', '-f', 'lavfi', '-i', 'color=black:s=64x64:d=0.1',
+        '-frames:v', '1', '-f', 'null', '-',
+      ]);
+      _ffmpegOk = ReturnCode.isSuccess(await session.getReturnCode());
+    } catch (_) {
+      _ffmpegOk = false;
+    }
+    notifyListeners();
+  }
+
+  // ── الشرائط المصغرة (شرائط تايم لاين بأسلوب CapCut) ──
+  final Map<String, List<String>> stripThumbs = {};
+  final Set<String> _stripLoading = {};
+
+  void ensureStripThumbs(ClipItem clip) {
+    if (clip.type != MediaType.video) return;
+    if (stripThumbs[clip.id] != null) return;
+    if (_stripLoading.contains(clip.id)) return;
+    _stripLoading.add(clip.id);
+    ThumbStrip.generate(
+      sourcePath: clip.sourcePath,
+      from: clip.inPoint,
+      to: clip.outPoint,
+      count: 6,
+    ).then((thumbs) {
+      if (thumbs.isNotEmpty) stripThumbs[clip.id] = thumbs;
+      notifyListeners();
+    }).catchError((_) {}).whenComplete(() => _stripLoading.remove(clip.id));
+  }
+
+  // ── المؤثرات (نمط CapCut) ──
+
+  void applyEffect(ClipItem clip, String effectId, double intensity) {
+    pushUndo();
+    final fx = Map<String, double>.of(clip.effects);
+    if (intensity <= 0.01) {
+      fx.remove(effectId);
+    } else {
+      fx[effectId] = intensity;
+    }
+    updateClip(clip.copyWith(effects: fx));
+  }
+
+  void removeEffect(ClipItem clip, String effectId) {
+    pushUndo();
+    final fx = Map<String, double>.of(clip.effects)..remove(effectId);
+    updateClip(clip.copyWith(effects: fx));
+  }
+
+  bool hasEffect(ClipItem clip, String effectId) =>
+      (clip.effects[effectId] ?? 0) > 0.01;
+
+  // ── الإطارات المفتاحية ──
+
+  /// إضافة إطار مفتاحي عند المؤشر للنص (بقيمه الحالية).
+  void addTextKeyframe(TextOverlay t) {
+    pushUndo();
+    final kf = OvKeyframe(
+      t: projectTime,
+      nx: t.nx,
+      ny: t.ny,
+      scale: t.scale,
+      opacity: 1,
+      rotation: t.rotation,
+    );
+    t.keyframes.removeWhere((k) => (k.t - projectTime).abs() < 0.05);
+    t.keyframes.add(kf);
+    t.keyframes.sort((a, b) => a.t.compareTo(b.t));
+    _autosave();
+    notifyListeners();
+  }
+
+  void clearTextKeyframes(TextOverlay t) {
+    if (t.keyframes.isEmpty) return;
+    pushUndo();
+    t.keyframes.clear();
+    _autosave();
+    notifyListeners();
+  }
+
+  /// إضافة إطار مفتاحي عند المؤشر للملصق/الطبقة.
+  void addStickerKeyframe(ImageOverlay s) {
+    pushUndo();
+    final kf = OvKeyframe(
+      t: projectTime,
+      nx: s.nx,
+      ny: s.ny,
+      scale: s.scale,
+      opacity: s.opacity,
+      rotation: s.rotation,
+    );
+    s.keyframes.removeWhere((k) => (k.t - projectTime).abs() < 0.05);
+    s.keyframes.add(kf);
+    s.keyframes.sort((a, b) => a.t.compareTo(b.t));
+    _autosave();
+    notifyListeners();
+  }
+
+  void clearStickerKeyframes(ImageOverlay s) {
+    if (s.keyframes.isEmpty) return;
+    pushUndo();
+    s.keyframes.clear();
+    _autosave();
+    notifyListeners();
+  }
+
+  // ── طبقات الفيديو (PiP) ──
+
+  final Map<String, VideoPlayerController> _layerControllers = {};
+
+  VideoPlayerController? layerControllerFor(ImageOverlay s) {
+    if (!s.isVideoLayer) return null;
+    return _layerControllers[s.id];
+  }
+
+  Future<void> ensureLayerController(ImageOverlay s) async {
+    if (!s.isVideoLayer || _layerControllers.containsKey(s.id)) return;
+    final c = VideoPlayerController.file(File(s.videoPath!));
+    try {
+      _layerControllers[s.id] = c;
+      await c.initialize();
+      await c.setLooping(true);
+      await c.setVolume(s.videoMuted ? 0.0 : s.videoVolume);
+      notifyListeners();
+    } catch (_) {
+      _layerControllers.remove(s.id);
+      raiseError('تعذر تحميل طبقة الفيديو');
+    }
+  }
+
+  Future<void> addVideoLayer(String videoPath, double sourceDur) async {
+    pushUndo();
+    final start = projectTime.clamp(0.0, totalDuration).toDouble();
+    final layer = ImageOverlay(
+      id: ProjectsStore.newId(),
+      videoPath: videoPath,
+      nx: 0.5,
+      ny: 0.5,
+      scale: 0.38,
+      start: start,
+      end: (start + sourceDur).clamp(start + 0.3, totalDuration + sourceDur),
+    );
+    project.overlays.add(layer);
+    selectedStickerId = layer.id;
+    selectedClipId = null;
+    selectedTextId = null;
+    await ensureLayerController(layer);
+    _autosave();
+    notifyListeners();
+  }
+
+  void _syncLayers() {
+    for (final s in project.overlays.where((x) => x.isVideoLayer)) {
+      final c = _layerControllers[s.id];
+      if (c == null || !c.value.isInitialized) continue;
+      final active = projectTime >= s.start && projectTime < s.end;
+      try {
+        if (playing && active) {
+          if (!c.value.isPlaying) c.play();
+          final local = projectTime - s.start;
+          final srcPos = s.videoInPoint + local * s.videoSpeed;
+          final dur = c.value.duration.inMilliseconds / 1000.0;
+          final target = dur <= 0 ? 0.0 : srcPos % dur;
+          final cur = c.value.position.inMilliseconds / 1000.0;
+          if ((cur - target).abs() > 0.5) {
+            c.seekTo(Duration(milliseconds: (target * 1000).round()));
+          }
+          c.setVolume(s.videoMuted ? 0.0 : s.videoVolume);
+        } else {
+          if (c.value.isPlaying) c.pause();
+        }
+      } catch (_) {}
+    }
   }
 
   // ── تحديد ──
@@ -251,12 +449,20 @@ class EditorState extends ChangeNotifier {
     }
 
     _syncMusic();
+    _syncLayers();
     notifyListeners();
   }
 
   void _pauseAllControllers() {
     for (final c in _controllers.values) {
       try { c.pause(); } catch (_) {}
+    }
+    _pauseAllLayers();
+  }
+
+  void _pauseAllLayers() {
+    for (final c in _layerControllers.values) {
+      try { if (c.value.isPlaying) c.pause(); } catch (_) {}
     }
   }
 
@@ -274,6 +480,7 @@ class EditorState extends ChangeNotifier {
     playing = true;
     _startTicker();
     _syncMusic();
+    _syncLayers();
     notifyListeners();
   }
 
@@ -281,6 +488,7 @@ class EditorState extends ChangeNotifier {
     playing = false;
     _stopTicker();
     _pauseAllControllers();
+    _pauseAllLayers();
     _syncMusic();
     notifyListeners();
   }
@@ -307,6 +515,7 @@ class EditorState extends ChangeNotifier {
       }
     }
     _syncMusic();
+    _syncLayers();
     notifyListeners();
   }
 
@@ -667,6 +876,25 @@ class EditorState extends ChangeNotifier {
   void updateText(TextOverlay t) {
     final i = project.texts.indexOf(t);
     if (i >= 0) project.texts[i] = t;
+    // مزامنة أقرب إطار مفتاحي عند التعديل اليدوي
+    if (t.keyframes.isNotEmpty) {
+      OvKeyframe? best;
+      double bestD = 1e9;
+      for (final k in t.keyframes) {
+        final d = (k.t - projectTime).abs();
+        if (d < bestD) {
+          bestD = d;
+          best = k;
+        }
+      }
+      if (best != null && bestD < 0.4) {
+        best
+          ..nx = t.nx
+          ..ny = t.ny
+          ..scale = t.scale
+          ..rotation = t.rotation;
+      }
+    }
     _autosave();
     notifyListeners();
   }
@@ -706,6 +934,26 @@ class EditorState extends ChangeNotifier {
   void updateSticker(ImageOverlay s) {
     final i = project.overlays.indexOf(s);
     if (i >= 0) project.overlays[i] = s;
+    // مزامنة أقرب إطار مفتاحي عند التعديل اليدوي
+    if (s.keyframes.isNotEmpty) {
+      OvKeyframe? best;
+      double bestD = 1e9;
+      for (final k in s.keyframes) {
+        final d = (k.t - projectTime).abs();
+        if (d < bestD) {
+          bestD = d;
+          best = k;
+        }
+      }
+      if (best != null && bestD < 0.4) {
+        best
+          ..nx = s.nx
+          ..ny = s.ny
+          ..scale = s.scale
+          ..rotation = s.rotation
+          ..opacity = s.opacity;
+      }
+    }
     _autosave();
     notifyListeners();
   }
@@ -714,6 +962,7 @@ class EditorState extends ChangeNotifier {
     pushUndo();
     project.overlays.remove(s);
     if (selectedStickerId == s.id) selectedStickerId = null;
+    _layerControllers.remove(s.id)?.dispose();
     _autosave();
     notifyListeners();
   }
@@ -862,6 +1111,9 @@ class EditorState extends ChangeNotifier {
     }
     for (final p in _musicPlayers.values) {
       try { p.dispose(); } catch (_) {}
+    }
+    for (final c in _layerControllers.values) {
+      try { c.dispose(); } catch (_) {}
     }
     _saveDebounce?.cancel();
     super.dispose();

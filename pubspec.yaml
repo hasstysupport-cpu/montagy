@@ -1,7 +1,7 @@
 name: montagy
 description: "Montagy — مونتاجي: استوديو مونتاج فيديو احترافي (قوة CapCut وبساطة InShot في تطبيق واحد)."
 publish_to: "none"
-version: 2.1.0+9
+version: 2.2.0+10
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

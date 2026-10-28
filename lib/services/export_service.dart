@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../data/color_engine.dart';
+import '../data/effects_catalog.dart';
 import '../data/models.dart';
 import 'ffmpeg_gateway.dart';
 import 'overlay_renderer.dart';
@@ -125,46 +126,90 @@ class ExportService {
 
       // ── الطبقات → PNG ──
       final overlaySpecs = <OverlaySpec>[];
+      final videoLayers = <_VideoLayerSpec>[];
       var pngIndex = 0;
       for (final txt in project.texts) {
         if (txt.text.trim().isEmpty) continue;
         if (job.isCancelled()) return _cancelled(work);
-        final f = await OverlayRenderer.renderText(
-          txt,
-          frameW: W,
-          frameH: H,
-          outPath: p.join(wd, 'ov$pngIndex.png'),
-        );
-        overlaySpecs.add(await OverlaySpec.fromOverlay(
-            txt.start, txt.end, txt.nx, txt.ny, txt.animIn, txt.animOut,
-            txt.animDur, f.path));
-        pngIndex++;
+        if (txt.keyframes.length >= 2) {
+          overlaySpecs.addAll(await _keyframedTextSpecs(
+              txt, W, H, wd, () => 'ov${pngIndex++}.png'));
+        } else {
+          final f = await OverlayRenderer.renderText(
+            txt,
+            frameW: W,
+            frameH: H,
+            outPath: p.join(wd, 'ov${pngIndex++}.png'),
+          );
+          overlaySpecs.add(OverlaySpec(
+            pngPath: f.path,
+            start: txt.start,
+            end: txt.end,
+            nx: txt.nx,
+            ny: txt.ny,
+            animIn: txt.animIn,
+            animOut: txt.animOut,
+            animDur: txt.animDur,
+          ));
+        }
       }
       for (final st in project.overlays) {
         if (job.isCancelled()) return _cancelled(work);
-        if (st.emoji != null) {
+        if (st.isVideoLayer && File(st.videoPath!).existsSync()) {
+          videoLayers.add(_VideoLayerSpec(
+            path: st.videoPath!,
+            inPoint: st.videoInPoint,
+            speed: st.videoSpeed,
+            scale: st.scale.clamp(0.05, 1.0),
+            rotation: st.rotation,
+            nx: st.nx,
+            ny: st.ny,
+            start: st.start,
+            end: st.end,
+            animIn: st.animIn,
+            animOut: st.animOut,
+            animDur: st.animDur,
+            volume: st.videoMuted ? 0.0 : st.videoVolume,
+          ));
+        } else if (st.keyframes.length >= 2) {
+          overlaySpecs.addAll(await _keyframedStickerSpecs(
+              st, W, H, wd, () => 'ov${pngIndex++}.png'));
+        } else if (st.emoji != null) {
           final f = await OverlayRenderer.renderEmoji(
             st.emoji!,
             relScale: st.scale,
             frameH: H,
-            outPath: p.join(wd, 'ov$pngIndex.png'),
+            outPath: p.join(wd, 'ov${pngIndex++}.png'),
           );
-          overlaySpecs.add(await OverlaySpec.fromOverlay(
-              st.start, st.end, st.nx, st.ny, st.animIn, st.animOut,
-              st.animDur, f.path));
+          overlaySpecs.add(OverlaySpec(
+            pngPath: f.path,
+            start: st.start,
+            end: st.end,
+            nx: st.nx,
+            ny: st.ny,
+            animIn: st.animIn,
+            animOut: st.animOut,
+            animDur: st.animDur,
+          ));
         } else if (st.imagePath != null && File(st.imagePath!).existsSync()) {
           final f = await OverlayRenderer.renderImage(
             st.imagePath!,
             relScale: st.scale,
             frameH: H,
             rotationDeg: st.rotation,
-            outPath: p.join(wd, 'ov$pngIndex.png'),
+            outPath: p.join(wd, 'ov${pngIndex++}.png'),
           );
-          overlaySpecs.add(await OverlaySpec.fromOverlay(
-              st.start, st.end, st.nx, st.ny, st.animIn, st.animOut,
-              st.animDur, f.path));
+          overlaySpecs.add(OverlaySpec(
+            pngPath: f.path,
+            start: st.start,
+            end: st.end,
+            nx: st.nx,
+            ny: st.ny,
+            animIn: st.animIn,
+            animOut: st.animOut,
+            animDur: st.animDur,
+          ));
         }
-        pngIndex++;
       }
       report(0.04, 'تجهيز المشروع...');
 
@@ -230,12 +275,17 @@ class ExportService {
       final finalPath = p.join(outputs.path, '${safeName}_$stamp.mp4');
 
       String resultPath;
-      if (overlaySpecs.isNotEmpty || audioTracks.isNotEmpty) {
+      if (overlaySpecs.isNotEmpty ||
+          audioTracks.isNotEmpty ||
+          videoLayers.isNotEmpty) {
         final args = _buildFinalArgs(
           base: base,
           overlays: overlaySpecs,
+          videoLayers: videoLayers,
           audio: audioTracks,
           total: total,
+          W: W,
+          H: H,
           fps: job.fps,
           crf: job.crf,
           outPath: finalPath,
@@ -310,8 +360,10 @@ class ExportService {
       intensity: clip.filterIntensity,
       adjust: clip.adjust,
     );
+    final effectsChain = EffectsCatalog.chainsForClip(clip.effects);
     final post = <String>[
       if (colorChain.isNotEmpty) colorChain,
+      if (effectsChain.isNotEmpty) effectsChain,
       'fps=$fps',
       'format=yuv420p',
     ];
@@ -429,13 +481,41 @@ class ExportService {
   static String _xfadeName(String? id) {
     switch (id) {
       case 'slideleft': return 'slideleft';
+      case 'slideright': return 'slideright';
+      case 'slideup': return 'slideup';
+      case 'slidedown': return 'slidedown';
       case 'wiperight': return 'wiperight';
+      case 'wipeleft': return 'wipeleft';
+      case 'wipeup': return 'wipeup';
+      case 'wipedown': return 'wipedown';
       case 'circleopen': return 'circleopen';
+      case 'circleclose': return 'circleclose';
+      case 'rectopen': return 'rectopen';
+      case 'rectclose': return 'rectclose';
       case 'dissolve': return 'dissolve';
       case 'smoothleft': return 'smoothleft';
+      case 'smoothright': return 'smoothright';
+      case 'smoothup': return 'smoothup';
+      case 'smoothdown': return 'smoothdown';
       case 'zoomin': return 'zoomin';
       case 'pixelize': return 'pixelize';
       case 'radial': return 'radial';
+      case 'fadeblack': return 'fadeblack';
+      case 'fadewhite': return 'fadewhite';
+      case 'distance': return 'distance';
+      case 'hblur': return 'hblur';
+      case 'diagtl': return 'diagtl';
+      case 'diagtr': return 'diagtr';
+      case 'diagbl': return 'diagbl';
+      case 'diagbr': return 'diagbr';
+      case 'hlslice': return 'hlslice';
+      case 'hrslice': return 'hrslice';
+      case 'vuslice': return 'vuslice';
+      case 'vdslice': return 'vdslice';
+      case 'squeezeh': return 'squeezeh';
+      case 'squeezev': return 'squeezev';
+      case 'circlecrop': return 'circlecrop';
+      case 'rectcrop': return 'rectcrop';
       default: return 'fade';
     }
   }
@@ -446,8 +526,11 @@ class ExportService {
   static List<String> _buildFinalArgs({
     required String base,
     required List<OverlaySpec> overlays,
+    required List<_VideoLayerSpec> videoLayers,
     required List<AudioTrack> audio,
     required double total,
+    required int W,
+    required int H,
     required int fps,
     required int crf,
     required String outPath,
@@ -456,6 +539,17 @@ class ExportService {
     for (final ov in overlays) {
       args.addAll(['-loop', '1', '-t', _n(total + 0.3), '-i', ov.pngPath]);
     }
+    var videoBase = 1 + overlays.length;
+    for (final vl in videoLayers) {
+      final dur = (vl.end - vl.start).clamp(0.1, total);
+      args.addAll([
+        '-ss', _n(vl.inPoint),
+        '-t', _n(dur * vl.speed + 0.2),
+        '-i', vl.path,
+      ]);
+    }
+    final videoLayerIdx0 = videoBase;
+    videoBase += videoLayers.length;
     for (final tr in audio) {
       args.addAll([
         '-ss', _n(tr.inPoint),
@@ -482,22 +576,60 @@ class ExportService {
       fc.add('[${1 + k}:v]${chain.join(',')}[ov$k]');
     }
 
-    // سلسلة التركيب
+    // سلاسل طبقات الفيديو (PiP)
+    for (var v = 0; v < videoLayers.length; v++) {
+      final vl = videoLayers[v];
+      final inIdx = videoLayerIdx0 + v;
+      final targetH = (vl.scale * H).round().clamp(16, H);
+      final chain = <String>[
+        'setpts=${_n(1 / vl.speed)}*PTS',
+        'scale=-2:$targetH',
+        'fps=$fps',
+        'format=rgba',
+      ];
+      if (vl.rotation.abs() > 0.5) {
+        final rad = _n(vl.rotation * math.pi / 180.0);
+        chain.add('rotate=$rad:c=black@0.0:ow=rotw($rad):oh=roth($rad)');
+      }
+      if (vl.animIn != TextAnim.none && vl.animDur > 0.02) {
+        chain.add('fade=t=in:st=${_n(vl.start)}:d=${_n(vl.animDur)}:alpha=1');
+      }
+      if (vl.animOut != TextAnim.none && vl.animDur > 0.02) {
+        final st = vl.end - vl.animDur;
+        if (st > vl.start + 0.05) {
+          chain.add('fade=t=out:st=${_n(st)}:d=${_n(vl.animDur)}:alpha=1');
+        }
+      }
+      fc.add('[${inIdx}:v]${chain.join(',')}[vl$v]');
+    }
+
+    // سلسلة التركيب (PNG ثم طبقات الفيديو)
     var vLabel = '[0:v]';
     for (var k = 0; k < overlays.length; k++) {
       final ov = overlays[k];
-      final isLast = k == overlays.length - 1;
-      final next = isLast ? '[vout]' : '[vo$k]';
+      final next = '[vo$k]';
       fc.add('$vLabel[ov$k]overlay=x=${ov.xExpr()}:y=${ov.yExpr()}:'
           'enable=${_between(ov.start, ov.end)}$next');
       vLabel = next;
     }
+    for (var v = 0; v < videoLayers.length; v++) {
+      final vl = videoLayers[v];
+      final isLast = v == videoLayers.length - 1;
+      final next = isLast ? '[vout]' : '[vlo$v]';
+      final x = "'(${_n(vl.nx)}*W-w/2)'";
+      final y = "'(${_n(vl.ny)}*H-h/2)'";
+      fc.add('$vLabel[vl$v]overlay=x=$x:y=$y:'
+          'enable=${_between(vl.start, vl.end)}$next');
+      vLabel = next;
+    }
+    if (overlays.isEmpty && videoLayers.isEmpty) vLabel = '[0:v]';
 
     // سلسلة الصوت
     var aOut = '[0:a]';
-    if (audio.isNotEmpty) {
-      final mixLabels = <String>['[0:a]'];
-      final audioBase = 1 + overlays.length;
+    final mixLabels = <String>[];
+    if (audio.isNotEmpty || videoLayers.any((v) => v.volume > 0.01)) {
+      mixLabels.add('[0:a]');
+      var mixIdx = videoBase;
       for (var m = 0; m < audio.length; m++) {
         final tr = audio[m];
         final chain = <String>[
@@ -514,12 +646,36 @@ class ExportService {
         }
         final delayMs = (tr.startAt * 1000).round();
         if (delayMs > 0) chain.add('adelay=$delayMs:all=1');
-        fc.add('[${audioBase + m}:a]${chain.join(',')}[am$m]');
+        fc.add('[${mixIdx}:a]${chain.join(',')}[am$m]');
         mixLabels.add('[am$m]');
+        mixIdx++;
       }
-      aOut = '[aout]';
-      fc.add('${mixLabels.join()}amix=inputs=${mixLabels.length}:'
-          'duration=first:normalize=0$aOut');
+      for (var v = 0; v < videoLayers.length; v++) {
+        final vl = videoLayers[v];
+        if (vl.volume <= 0.01) continue;
+        final aIdx = videoLayerIdx0 + v;
+        final dur = (vl.end - vl.start).clamp(0.1, total);
+        final chain = <String>[
+          'atrim=duration=${_n(dur)}',
+          'asetpts=PTS-STARTPTS',
+          ..._atempoChain(vl.speed),
+          'volume=${_n(vl.volume)}',
+          'aresample=44100',
+          'aformat=sample_fmts=fltp:channel_layouts=stereo',
+        ];
+        final delayMs = (vl.start * 1000).round();
+        if (delayMs > 0) chain.add('adelay=$delayMs:all=1');
+        fc.add('[${aIdx}:a]${chain.join(',')}[vla$v]');
+        mixLabels.add('[vla$v]');
+      }
+      if (mixLabels.length == 1) {
+        // الصوت الأساسي فقط
+        aOut = '[0:a]';
+      } else {
+        aOut = '[aout]';
+        fc.add('${mixLabels.join()}amix=inputs=${mixLabels.length}:'
+            'duration=first:normalize=0$aOut');
+      }
     }
 
     args.addAll([
@@ -538,6 +694,154 @@ class ExportService {
       outPath,
     ]);
     return args;
+  }
+
+  /// قطع PNG للنص مع إطارات مفتاحية — مواضع دقيقة بالاستيفاء
+  /// وحجم/دوران/شفافية مثبتة عند كل مفتاح.
+  static Future<List<OverlaySpec>> _keyframedTextSpecs(
+    TextOverlay txt,
+    int W,
+    int H,
+    String wd,
+    String Function() nextName,
+  ) async {
+    final kfs = txt.keyframes;
+    final specs = <OverlaySpec>[];
+    // نقاط القطع: بداية الطبقة ← المفاتيح ← نهايتها
+    final cuts = <double>[txt.start, ...kfs.map((k) => k.t), txt.end];
+    for (var i = 0; i < cuts.length - 1; i++) {
+      final segStart = cuts[i];
+      final segEnd = cuts[i + 1];
+      if (segEnd - segStart < 0.04) continue;
+      // المفتاح المرجعي للقطعة
+      final OvKeyframe ref;
+      if (i == 0) {
+        ref = kfs.first;
+      } else if (i >= kfs.length) {
+        ref = kfs.last;
+      } else {
+        ref = kfs[i - 0];
+      }
+      final f = await OverlayRenderer.renderText(
+        txt,
+        frameW: W,
+        frameH: H,
+        outPath: p.join(wd, nextName()),
+        opacity: ref.opacity,
+        scaleOverride: ref.scale,
+        rotationOverride: ref.rotation,
+      );
+      // موضع مستوفى داخل القطعة
+      final double nxA, nxB;
+      final double nyA, nyB;
+      if (i == 0) {
+        nxA = nxB = kfs.first.nx;
+        nyA = nyB = kfs.first.ny;
+      } else if (i >= kfs.length) {
+        nxA = nxB = kfs.last.nx;
+        nyA = nyB = kfs.last.ny;
+      } else {
+        nxA = kfs[i - 1].nx;
+        nxB = kfs[i].nx;
+        nyA = kfs[i - 1].ny;
+        nyB = kfs[i].ny;
+      }
+      final xExpr = _segLerpExpr(nxA, nxB, segStart, 'W');
+      final yExpr = _segLerpExpr(nyA, nyB, segStart, 'H');
+      specs.add(OverlaySpec(
+        pngPath: f.path,
+        start: segStart,
+        end: segEnd,
+        nx: nxA,
+        ny: nyA,
+        animIn: TextAnim.none,
+        animOut: TextAnim.none,
+        animDur: 0,
+        xExprOverride: xExpr,
+        yExprOverride: yExpr,
+      ));
+    }
+    return specs;
+  }
+
+  static Future<List<OverlaySpec>> _keyframedStickerSpecs(
+    ImageOverlay st,
+    int W,
+    int H,
+    String wd,
+    String Function() nextName,
+  ) async {
+    final kfs = st.keyframes;
+    final specs = <OverlaySpec>[];
+    final cuts = <double>[st.start, ...kfs.map((k) => k.t), st.end];
+    for (var i = 0; i < cuts.length - 1; i++) {
+      final segStart = cuts[i];
+      final segEnd = cuts[i + 1];
+      if (segEnd - segStart < 0.04) continue;
+      final OvKeyframe ref;
+      if (i == 0) {
+        ref = kfs.first;
+      } else if (i >= kfs.length) {
+        ref = kfs.last;
+      } else {
+        ref = kfs[i - 1];
+      }
+      final double nxA, nxB, nyA, nyB;
+      if (i == 0) {
+        nxA = nxB = kfs.first.nx;
+        nyA = nyB = kfs.first.ny;
+      } else if (i >= kfs.length) {
+        nxA = nxB = kfs.last.nx;
+        nyA = nyB = kfs.last.ny;
+      } else {
+        nxA = kfs[i - 1].nx;
+        nxB = kfs[i].nx;
+        nyA = kfs[i - 1].ny;
+        nyB = kfs[i].ny;
+      }
+      String pngPath;
+      if (st.emoji != null) {
+        final f = await OverlayRenderer.renderEmoji(
+          st.emoji!,
+          relScale: ref.scale,
+          frameH: H,
+          opacity: ref.opacity,
+          outPath: p.join(wd, nextName()),
+        );
+        pngPath = f.path;
+      } else {
+        final f = await OverlayRenderer.renderImage(
+          st.imagePath!,
+          relScale: ref.scale,
+          frameH: H,
+          rotationDeg: ref.rotation,
+          opacity: ref.opacity,
+          outPath: p.join(wd, nextName()),
+        );
+        pngPath = f.path;
+      }
+      specs.add(OverlaySpec(
+        pngPath: pngPath,
+        start: segStart,
+        end: segEnd,
+        nx: nxA,
+        ny: nyA,
+        animIn: TextAnim.none,
+        animOut: TextAnim.none,
+        animDur: 0,
+        xExprOverride: _segLerpExpr(nxA, nxB, segStart, 'W'),
+        yExprOverride: _segLerpExpr(nyA, nyB, segStart, 'H'),
+      ));
+    }
+    return specs;
+  }
+
+  /// تعبير lerp خطي بين قيمتين داخل قطعة زمنية.
+  static String _segLerpExpr(double a, double b, double t0, String unit) {
+    if ((a - b).abs() < 0.0005) {
+      return "'(${_n(a)}*$unit-w/2)'";
+    }
+    return "'(((${_n(a)}+${_n(b - a)}*(t-${_n(t0)}))*$unit)-w/2)'";
   }
 
   static String _between(double a, double b) => "'between(t,${_n(a)},${_n(b)})'";
@@ -620,6 +924,8 @@ class OverlaySpec {
   final double nx, ny;
   final TextAnim animIn, animOut;
   final double animDur;
+  final String? xExprOverride;
+  final String? yExprOverride;
 
   OverlaySpec({
     required this.pngPath,
@@ -630,31 +936,12 @@ class OverlaySpec {
     required this.animIn,
     required this.animOut,
     required this.animDur,
+    this.xExprOverride,
+    this.yExprOverride,
   });
 
-  static Future<OverlaySpec> fromOverlay(
-    double start,
-    double end,
-    double nx,
-    double ny,
-    TextAnim animIn,
-    TextAnim animOut,
-    double animDur,
-    String pngPath,
-  ) async {
-    return OverlaySpec(
-      pngPath: pngPath,
-      start: start,
-      end: end,
-      nx: nx,
-      ny: ny,
-      animIn: animIn,
-      animOut: animOut,
-      animDur: animDur,
-    );
-  }
-
   String xExpr() {
+    if (xExprOverride != null) return xExprOverride!;
     final baseX = '(${_nn(nx)}*W-w/2)';
     final inEnd = start + animDur;
     if (animIn == TextAnim.slideRight) {
@@ -663,10 +950,11 @@ class OverlaySpec {
     if (animIn == TextAnim.slideLeft) {
       return "'$baseX-if(lt(t,${_nn(inEnd)}),(1-(t-${_nn(start)})/${_nn(animDur)})*W,0)'";
     }
-    return baseX;
+    return "'$baseX'";
   }
 
   String yExpr() {
+    if (yExprOverride != null) return yExprOverride!;
     final baseY = '(${_nn(ny)}*H-h/2)';
     final inEnd = start + animDur;
     if (animIn == TextAnim.slideUp) {
@@ -675,8 +963,38 @@ class OverlaySpec {
     if (animIn == TextAnim.slideDown) {
       return "'$baseY-if(lt(t,${_nn(inEnd)}),(1-(t-${_nn(start)})/${_nn(animDur)})*H,0)'";
     }
-    return baseY;
+    return "'$baseY'";
   }
 
   static String _nn(double v) => ExportService._n(v);
+}
+
+/// طبقة فيديو PiP للتصدير.
+class _VideoLayerSpec {
+  final String path;
+  final double inPoint;
+  final double speed;
+  final double scale;
+  final double rotation;
+  final double nx, ny;
+  final double start, end;
+  final TextAnim animIn, animOut;
+  final double animDur;
+  final double volume;
+
+  _VideoLayerSpec({
+    required this.path,
+    required this.inPoint,
+    required this.speed,
+    required this.scale,
+    required this.rotation,
+    required this.nx,
+    required this.ny,
+    required this.start,
+    required this.end,
+    required this.animIn,
+    required this.animOut,
+    required this.animDur,
+    required this.volume,
+  });
 }

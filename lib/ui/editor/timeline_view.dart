@@ -542,7 +542,6 @@ class _ClipWidget extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final accent = context.accent;
     final w = clip.timelineDuration * pps;
-    final thumbOk = clip.thumbPath != null && File(clip.thumbPath!).existsSync();
 
     return Positioned(
       left: left,
@@ -577,12 +576,38 @@ class _ClipWidget extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: Stack(
               children: [
-                // الصور المصغرة
+                // الصور المصغرة — شرائط CapCut (توليد تدريجي)
                 Positioned.fill(
-                  child: thumbOk
-                      ? LayoutBuilder(builder: (ctx, box) {
-                          final count = (box.maxWidth / 54).ceil();
-                          return Row(
+                  child: LayoutBuilder(builder: (ctx, box) {
+                    final state = EditorScope.of(context);
+                    final strips = state.stripThumbs[clip.id];
+                    if (strips == null && clip.type == MediaType.video) {
+                      // طلب توليد الشرائط (مرة واحدة، خارج البناء)
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) state.ensureStripThumbs(clip);
+                      });
+                    }
+                    final count = (box.maxWidth / 52).ceil();
+                    if (strips != null && strips.isNotEmpty) {
+                      return Row(
+                        children: [
+                          for (var i = 0; i < count; i++)
+                            Expanded(
+                              child: Image.file(
+                                File(strips[i % strips.length]),
+                                fit: BoxFit.cover,
+                                cacheWidth: 72,
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox.shrink(),
+                              ),
+                            ),
+                        ],
+                      );
+                    }
+                    final thumbOk =
+                        clip.thumbPath != null && File(clip.thumbPath!).existsSync();
+                    return thumbOk
+                        ? Row(
                             children: [
                               for (var i = 0; i < count; i++)
                                 Expanded(
@@ -595,19 +620,19 @@ class _ClipWidget extends StatelessWidget {
                                   ),
                                 ),
                             ],
+                          )
+                        : Center(
+                            child: Icon(
+                              clip.type == MediaType.photo
+                                  ? Icons.image_outlined
+                                  : Icons.videocam_outlined,
+                              size: 22,
+                              color: dark
+                                  ? AppColors.darkTextDim
+                                  : AppColors.lightTextDim,
+                            ),
                           );
-                        })
-                      : Center(
-                          child: Icon(
-                            clip.type == MediaType.photo
-                                ? Icons.image_outlined
-                                : Icons.videocam_outlined,
-                            size: 22,
-                            color: dark
-                                ? AppColors.darkTextDim
-                                : AppColors.lightTextDim,
-                          ),
-                        ),
+                  }),
                 ),
                 // تعتيم خفيف + اسم
                 PositionedDirectional(
@@ -632,6 +657,12 @@ class _ClipWidget extends StatelessWidget {
                             textDirection: TextDirection.ltr,
                           ),
                         ),
+                        if (clip.effects.isNotEmpty) ...[
+                          const SizedBox(width: 3),
+                          Text('✨${clip.effects.length}',
+                              style: AppFont.w(700, size: 8,
+                                  color: Colors.lightBlueAccent)),
+                        ],
                         if (clip.muted)
                           const Icon(Icons.volume_off,
                               size: 10, color: Colors.white70),
