@@ -90,6 +90,9 @@ jobs:
             "https://github.com/sk3llo/ffmpeg_kit_flutter/releases/download/6.0.2/ffmpeg-kit-full-gpl-6.0.LTS.aar"
           ls -lh "$PKG_DIR/android/libs/"
 
+      - name: Read app version
+        run: echo "VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f1)" >> $GITHUB_ENV
+
       - name: Build release APK (universal)
         run: flutter build apk --release
 
@@ -101,11 +104,11 @@ jobs:
 
       - name: Prepare APKs + checksums
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk Montagy-v2.0.0.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Montagy-v2.0.0-arm64.apk
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Montagy-v2.0.0-armv7.apk
-          ls -lh Montagy-v2.0.0.apk Montagy-v2.0.0-arm64.apk Montagy-v2.0.0-armv7.apk
-          sha256sum Montagy-v2.0.0.apk Montagy-v2.0.0-arm64.apk Montagy-v2.0.0-armv7.apk | tee SHA256SUMS.txt
+          cp build/app/outputs/flutter-apk/app-release.apk Montagy-v$VERSION.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Montagy-v$VERSION-arm64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Montagy-v$VERSION-armv7.apk
+          ls -lh Montagy-v$VERSION.apk Montagy-v$VERSION-arm64.apk Montagy-v$VERSION-armv7.apk
+          sha256sum Montagy-v$VERSION.apk Montagy-v$VERSION-arm64.apk Montagy-v$VERSION-armv7.apk | tee SHA256SUMS.txt
           {
             echo '### SHA-256 checksums'
             echo '```'
@@ -128,9 +131,9 @@ jobs:
         with:
           name: Montagy-APK
           path: |
-            Montagy-v2.0.0.apk
-            Montagy-v2.0.0-arm64.apk
-            Montagy-v2.0.0-armv7.apk
+            Montagy-v${{ env.VERSION }}.apk
+            Montagy-v${{ env.VERSION }}-arm64.apk
+            Montagy-v${{ env.VERSION }}-armv7.apk
             SHA256SUMS.txt
           retention-days: 90
 
@@ -142,21 +145,25 @@ jobs:
           body_path: release_notes.md
           append_body: true
           body: |
-            📱 **مونتاجي v2.0.0** — استوديو مونتاج كامل (قوة CapCut + بساطة InShot)
+            📱 **مونتاجي v${{ env.VERSION }}** — استوديو مونتاج كامل (قوة CapCut + بساطة InShot)
 
-            - مقاطع متعددة + تايم لاين متعدد التراكات (قص/تقسيم/تشذيب/سرعة/تدوير/اقتصاص/عكس/تجميد)
-            - 40+ فلتر أصلي + تعديل لوني كامل + كانفس ونسب أبعاد + انتقالات
-            - نصوص عربية بخطوط فاخرة + ملصقات إيموجي وصور + موسيقى وتعليق صوتي واستخراج صوت
+            **جديد في v2.1 — تحكم بنمط CapCut/InShot:**
+            - شريط أدوات سياقي: أدوات المقطع تظهر عند تحديده (تقسيم/سرعة/حجم/تدوير/عكس/تجميد/استخراج صوت/استبدال)
+            - ضغط طويل على المقطع = سحب لإعادة الترتيب | سحب الصوت والنصوص لتغيير توقيتها مع الالتصاق بالمؤشر
+            - تدوير النصوص والملصقات بلف إصبعين + تكبير بالقرص + خطوط توسيط بالالتصاق
+            - تراجع + إعادة | ثيم داكن أزرق/أسود + فاتح أخضر/أبيض | خط عربي فاخر Alexandria
+            - مقاطع متعددة + تايم لاين متعدد التراكات (قص/تشذيب/سرعة/اقتصاص) + 40+ فلتر + تعديل لوني + انتقالات
+            - نصوص عربية بخطوط فاخرة + ملصقات + موسيقى وتعليق صوتي + كانفس
             - تصدير MP4 حقيقي بجودة حتى 1080p/2K مع تقدم مباشر
             - Built automatically from commit `${{ github.sha }}`
-            - **Montagy-v2.0.0-arm64.apk** ← لجميع الموبايلات الحديثة ✅ حمّل ده
-            - Montagy-v2.0.0-armv7.apk — للأجهزة الأقدم 32-bit
-            - Montagy-v2.0.0.apk — Universal (كل المعالجات)
+            - **Montagy-v${{ env.VERSION }}-arm64.apk** ← لجميع الموبايلات الحديثة ✅ حمّل ده
+            - Montagy-v${{ env.VERSION }}-armv7.apk — للأجهزة الأقدم 32-bit
+            - Montagy-v${{ env.VERSION }}.apk — Universal (كل المعالجات)
             - Install: download → open → allow "install unknown apps"
 
             ⚠️ Debug-signed build — for personal use / testing only.
           files: |
-            Montagy-v2.0.0.apk
-            Montagy-v2.0.0-arm64.apk
-            Montagy-v2.0.0-armv7.apk
+            Montagy-v${{ env.VERSION }}.apk
+            Montagy-v${{ env.VERSION }}-arm64.apk
+            Montagy-v${{ env.VERSION }}-armv7.apk
           make_latest: true
