@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../data/color_engine.dart';
 import '../data/effects_catalog.dart';
+import '../data/filter_presets.dart';
 import '../data/models.dart';
 import 'ffmpeg_gateway.dart';
 import 'overlay_renderer.dart';
@@ -101,6 +102,16 @@ class ExportService {
       final clips =
           project.clips.where((c) => File(c.sourcePath).existsSync()).toList();
       if (clips.isEmpty) return ExportResult(error: 'ملفات المقاطع غير موجودة');
+
+      // استخراج ملفات LUT الحقيقية المطلوبة قبل البناء
+      final lutEntries = <(String, double)>[
+        for (final c in clips)
+          if (FilterPresets.resolveId(c.filterPreset) != null)
+            (FilterPresets.resolveId(c.filterPreset)!, c.filterIntensity),
+      ];
+      if (lutEntries.isNotEmpty) {
+        await LutResolver.prepareAll(lutEntries);
+      }
 
       // حسابات التايم لاين
       final durs = clips.map((c) => c.timelineDuration).toList();

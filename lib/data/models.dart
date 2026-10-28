@@ -168,6 +168,10 @@ class ColorParams {
   final double fade;         // 0..1 رفع الأسود
   final double vignette;     // 0..1
   final double monochrome;   // 0..1
+  final double sharpen;      // 0..1 حدة
+  final double highlights;   // -1..1 إبرازات
+  final double shadows;      // -1..1 ظلال
+  final double hue;          // -1..1 دورة الهوى (180°)
 
   const ColorParams({
     this.brightness = 0,
@@ -178,6 +182,10 @@ class ColorParams {
     this.fade = 0,
     this.vignette = 0,
     this.monochrome = 0,
+    this.sharpen = 0,
+    this.highlights = 0,
+    this.shadows = 0,
+    this.hue = 0,
   });
 
   factory ColorParams.neutral() => const ColorParams();
@@ -191,6 +199,10 @@ class ColorParams {
     double? fade,
     double? vignette,
     double? monochrome,
+    double? sharpen,
+    double? highlights,
+    double? shadows,
+    double? hue,
   }) =>
       ColorParams(
         brightness: brightness ?? this.brightness,
@@ -201,11 +213,16 @@ class ColorParams {
         fade: fade ?? this.fade,
         vignette: vignette ?? this.vignette,
         monochrome: monochrome ?? this.monochrome,
+        sharpen: sharpen ?? this.sharpen,
+        highlights: highlights ?? this.highlights,
+        shadows: shadows ?? this.shadows,
+        hue: hue ?? this.hue,
       );
 
   bool get isNeutral =>
       brightness == 0 && contrast == 0 && saturation == 0 && warmth == 0 &&
-      tint == 0 && fade == 0 && vignette == 0 && monochrome == 0;
+      tint == 0 && fade == 0 && vignette == 0 && monochrome == 0 &&
+      sharpen == 0 && highlights == 0 && shadows == 0 && hue == 0;
 }
 
 /// مقطع في التايم لاين.
@@ -385,6 +402,7 @@ class ClipItem {
 Map<String, dynamic> _paramsToJson(ColorParams p) => {
       'b': p.brightness, 'c': p.contrast, 's': p.saturation, 'w': p.warmth,
       't': p.tint, 'f': p.fade, 'v': p.vignette, 'm': p.monochrome,
+      'sh': p.sharpen, 'hl': p.highlights, 'sd': p.shadows, 'hu': p.hue,
     };
 
 ColorParams _paramsFromJson(Map<String, dynamic>? j) => j == null
@@ -398,6 +416,10 @@ ColorParams _paramsFromJson(Map<String, dynamic>? j) => j == null
         fade: (j['f'] ?? 0).toDouble(),
         vignette: (j['v'] ?? 0).toDouble(),
         monochrome: (j['m'] ?? 0).toDouble(),
+        sharpen: (j['sh'] ?? 0).toDouble(),
+        highlights: (j['hl'] ?? 0).toDouble(),
+        shadows: (j['sd'] ?? 0).toDouble(),
+        hue: (j['hu'] ?? 0).toDouble(),
       );
 
 /// طبقة نص.

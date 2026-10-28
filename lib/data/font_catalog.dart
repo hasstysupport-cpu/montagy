@@ -11,6 +11,7 @@ class FontCatalog {
   static const List<FontEntry> all = [
     FontEntry('Alexandria', 'الإسكندرية', true, defaultWeight: 700),
     FontEntry('IBMPlexSansArabic', 'بليكس عربي', true),
+    FontEntry('Cairo', 'القاهرة', true),
     FontEntry('Amiri', 'أميري', true),
     FontEntry('ReemKufi', 'ريم كوفي', true),
     FontEntry('ElMessiri', 'المسيري', true),

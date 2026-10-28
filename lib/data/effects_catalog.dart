@@ -34,8 +34,8 @@ class EffectPreset {
       case 'mirror':
         return 'crop=iw/2:ih:0:0,split[m][o];[o]hflip[mf];[m][mf]hstack';
       case 'glow':
-        return 'split[a][b];[b]gblur=sigma=${_n(8 + 12 * i)}[bb];'
-            '[a][bb]blend=all_mode=screen:all_opacity=${_n(0.2 + 0.35 * i)}';
+        return 'split[gl_a][gl_b];[gl_b]gblur=sigma=${_n(8 + 12 * i)}[gl_bb];'
+            '[gl_a][gl_bb]blend=all_mode=screen:all_opacity=${_n(0.2 + 0.35 * i)}';
       case 'neon':
         return 'hue=h=${_n(8 + 14 * i)}:s=${_n(1.4 + 1.2 * i)}';
       case 'shake':

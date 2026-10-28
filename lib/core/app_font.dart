@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
-/// Alexandria — الخط الرئيسي (متغير الوزن 100..900).
-/// نستخدم fontVariations للتحكم في الوزن لأن الخط Variable.
+/// IBM Plex Sans Arabic — الخط الرئيسي للواجهة (عربي + لاتيني).
+/// أوزان ثابتة مسجلة: 400/500/600/700 — نحوّل الوزن المطلوب لأقرب وزن.
 class AppFont {
-  static const String family = 'Alexandria';
+  static const String family = 'IBMPlexSansArabic';
+
+  static FontWeight _fw(double weight) {
+    if (weight >= 700) return FontWeight.w700;
+    if (weight >= 600) return FontWeight.w600;
+    if (weight >= 500) return FontWeight.w500;
+    return FontWeight.w400;
+  }
 
   static TextStyle w(double weight,
       {double? size, Color? color, double? height, double? spacing}) {
     return TextStyle(
       fontFamily: family,
-      fontVariations: [FontVariation('wght', weight)],
+      fontWeight: _fw(weight),
       fontSize: size,
       color: color,
       height: height,

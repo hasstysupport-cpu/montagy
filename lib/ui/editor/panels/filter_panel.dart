@@ -11,105 +11,145 @@ import '../../../data/models.dart';
 import '../../widgets/common.dart';
 import '../editor_screen.dart';
 
-/// لوحة الفلاتر — 44 فلتراً بمعاينة فورية + شدة + تطبيق على الكل.
+/// لوحة الفلاتر — 42 فلتر LUT حقيقي بتصنيفات CapCut + شدة + تطبيق على الكل.
 class FilterPanel extends StatelessWidget {
   const FilterPanel();
 
   @override
   Widget build(BuildContext context) {
     final state = EditorScope.of(context);
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final clip = state.selectedClip ?? state.project.clips.firstOrNull;
     if (clip == null) {
       return const PanelScroll(child: PanelHint('أضف مقطعاً أولاً'));
     }
 
-    final thumbOk = clip.thumbPath != null && File(clip.thumbPath!).existsSync();
+    final currentId = FilterPresets.resolveId(clip.filterPreset);
+    final currentCat = FilterPresets.byId(currentId)?.category ?? 'شائع';
+    var cat = currentCat;
 
-    return PanelScroll(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: LabeledSlider(
-                  label: 'الشدة',
-                  value: clip.filterIntensity,
-                  min: 0,
-                  max: 1,
-                  display: (v) => '${(v * 100).round()}%',
-                  onChanged: (v) => state.updateClip(
-                      clip.copyWith(filterIntensity: v)),
-                ),
+    return StatefulBuilder(builder: (context, setPanel) {
+      return PanelScroll(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // التصنيفات (نمط CapCut)
+            SizedBox(
+              height: 38,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: FilterCategories.all.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (ctx, i) {
+                  final c = FilterCategories.all[i];
+                  final selected = c == cat;
+                  return ChoiceChip(
+                    label: Text(c),
+                    selected: selected,
+                    onSelected: (_) => setPanel(() => cat = c),
+                    labelStyle: AppFont.w(selected ? 700 : 500, size: 12,
+                        color: selected ? Colors.white : null),
+                    selectedColor: context.accent,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                  );
+                },
               ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () => state.applyFilterToAll(
-                    clip.filterPreset, clip.filterIntensity),
-                child: AppFont.w(700, size: 11.5, color: context.accent)
-                    .make(S.applyToAll),
-              ),
-            ],
-          ),
-          SizedBox(
-            height: 116,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+            ),
+            const SizedBox(height: 8),
+            Row(
               children: [
-                _FilterThumb(
-                  name: 'الأصلية',
-                  thumbPath: clip.thumbPath,
-                  selected: clip.filterPreset == null,
-                  onTap: () => state.updateClip(
-                      clip.copyWith(filterPreset: null, clearFilter: true)),
-                  preset: null,
-                ),
-                for (final f in FilterPresets.all)
-                  _FilterThumb(
-                    name: f.name,
-                    thumbPath: clip.thumbPath,
-                    selected: clip.filterPreset == f.id,
-                    preset: f,
-                    onTap: () => state.updateClip(
-                        clip.copyWith(filterPreset: f.id),
-                        structural: true),
+                Expanded(
+                  child: LabeledSlider(
+                    label: 'الشدة',
+                    value: clip.filterIntensity,
+                    min: 0,
+                    max: 1,
+                    display: (v) => '${(v * 100).round()}%',
+                    onChanged: (v) => state.updateClip(
+                        clip.copyWith(filterIntensity: v)),
                   ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => state.applyFilterToAll(
+                      clip.filterPreset, clip.filterIntensity),
+                  child: AppFont.w(700, size: 11.5, color: context.accent)
+                      .make(S.applyToAll),
+                ),
               ],
             ),
-          ),
-          if (!thumbOk)
-            PanelHint(dark ? '' : ''),
-        ],
-      ),
-    );
+            SizedBox(
+              height: 128,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _FilterThumb(
+                    name: 'الأصلية',
+                    thumbPath: clip.thumbPath,
+                    thumbAsset: null,
+                    matrix: null,
+                    selected: clip.filterPreset == null,
+                    onTap: () => state.updateClip(
+                        clip.copyWith(filterPreset: null, clearFilter: true)),
+                  ),
+                  for (final f in FilterPresets.byCategory(cat))
+                    _FilterThumb(
+                      name: f.name,
+                      thumbPath: clip.thumbPath,
+                      thumbAsset: f.thumbAsset,
+                      matrix: ColorFilterResolver.previewMatrix(
+                        presetId: f.id,
+                        intensity: 1,
+                        adjust: ColorParams.neutral(),
+                      ),
+                      selected: currentId == f.id,
+                      onTap: () => state.updateClip(
+                          clip.copyWith(filterPreset: f.id),
+                          structural: true),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
 class _FilterThumb extends StatelessWidget {
   final String name;
   final String? thumbPath;
-  final FilterPreset? preset;
+  final String? thumbAsset;
+  final List<double>? matrix;
   final bool selected;
   final VoidCallback onTap;
 
   const _FilterThumb({
     required this.name,
     required this.thumbPath,
+    required this.thumbAsset,
+    required this.matrix,
     required this.selected,
     required this.onTap,
-    this.preset,
   });
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final matrix = preset == null
-        ? null
-        : ColorEngine.matrix(
-            ColorEngine.resolve(preset!.params, 1, ColorParams.neutral()));
 
-    final thumbOk = thumbPath != null && File(thumbPath!).existsSync();
+    Widget? image;
+    final fileOk = thumbPath != null && File(thumbPath!).existsSync();
+    if (fileOk) {
+      image = Image.file(
+        File(thumbPath!),
+        fit: BoxFit.cover,
+        cacheWidth: 148,
+        errorBuilder: (_, __, ___) => _assetOrIcon(),
+      );
+    } else {
+      image = _assetOrIcon();
+    }
 
     return GestureDetector(
       onTap: onTap,
@@ -130,26 +170,12 @@ class _FilterThumb extends StatelessWidget {
                 ),
               ),
               clipBehavior: Clip.antiAlias,
-              child: thumbOk
-                  ? (matrix == null
-                      ? Image.file(
-                          File(thumbPath!),
-                          fit: BoxFit.cover,
-                          cacheWidth: 148,
-                          errorBuilder: (_, __, ___) =>
-                              const SizedBox.shrink(),
-                        )
-                      : ColorFiltered(
-                          colorFilter: ColorFilter.matrix(matrix),
-                          child: Image.file(
-                            File(thumbPath!),
-                            fit: BoxFit.cover,
-                            cacheWidth: 148,
-                            errorBuilder: (_, __, ___) =>
-                                const SizedBox.shrink(),
-                          ),
-                        ))
-                  : const Icon(Icons.movie_filter_outlined, size: 26),
+              child: matrix == null
+                  ? image
+                  : ColorFiltered(
+                      colorFilter: ColorFilter.matrix(matrix!),
+                      child: image,
+                    ),
             ),
             const SizedBox(height: 5),
             Text(
@@ -163,6 +189,18 @@ class _FilterThumb extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _assetOrIcon() {
+    if (thumbAsset != null) {
+      return Image.asset(
+        thumbAsset!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            const Icon(Icons.movie_filter_outlined, size: 26),
+      );
+    }
+    return const Icon(Icons.movie_filter_outlined, size: 26);
   }
 }
 

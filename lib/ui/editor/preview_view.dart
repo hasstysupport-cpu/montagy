@@ -926,13 +926,14 @@ class _PlayButton extends StatelessWidget {
           child: GestureDetector(
             onTap: () => state.togglePlay(),
             child: Container(
-              padding: const EdgeInsets.all(16),
+              width: 58,
+              height: 58,
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
+                color: Colors.black.withValues(alpha: 0.38),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.play_arrow,
-                  size: 36, color: Colors.white),
+                  size: 30, color: Colors.white),
             ),
           ),
         );

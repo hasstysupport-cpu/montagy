@@ -7,7 +7,7 @@ import '../../core/app_font.dart';
 import '../../core/strings.dart';
 import '../../data/models.dart';
 import '../../editor/editor_state.dart';
-import '../widgets/common.dart' show PanelScroll, PanelHint;
+import '../widgets/common.dart' show PanelScroll;
 import '../export/export_screen.dart';
 import 'dialogs/add_media_sheet.dart';
 import 'dialogs/crop_screen.dart';
@@ -27,17 +27,18 @@ import 'timeline_view.dart';
 import '../../services/projects_store.dart';
 
 /// تبويبات الأدوات الرئيسية — تظهر حين لا يوجد تحديد (نمط CapCut).
+/// الترتيب مطابق لـ CapCut: تعديل، صوت، نص، ملصقات، تراكب، مؤثرات، فلاتر، انتقالات، ضبط، تنسيق.
 const List<(IconData, String)> kEditorTabs = [
-  (Icons.content_cut, S.tools),
-  (Icons.auto_awesome_outlined, S.filters),
-  (Icons.blur_on, S.effects),
-  (Icons.music_note_outlined, S.audio),
-  (Icons.text_fields, S.text),
-  (Icons.emoji_emotions_outlined, S.sticker),
-  (Icons.layers_outlined, S.overlay),
-  (Icons.tune, S.adjust),
-  (Icons.crop_free, S.canvas),
-  (Icons.swap_horiz, S.transitions),
+  (Icons.content_cut, S.tools),          // 0
+  (Icons.music_note_outlined, S.audio),   // 1
+  (Icons.text_fields, S.text),            // 2
+  (Icons.emoji_emotions_outlined, S.sticker), // 3
+  (Icons.layers_outlined, S.overlay),     // 4
+  (Icons.blur_on, S.effects),             // 5
+  (Icons.auto_awesome_outlined, S.filters), // 6
+  (Icons.swap_horiz, S.transitions),      // 7
+  (Icons.tune, S.adjust),                 // 8
+  (Icons.crop_free, S.canvas),            // 9
 ];
 
 /// نطاق المحرر.
@@ -295,6 +296,8 @@ class _ClipToolsBar extends StatelessWidget {
     final isPhoto = clip.type == MediaType.photo;
 
     final tools = <_ToolDef>[
+      // ترتيب CapCut: تقسيم، سرعة، صوت، فلتر، ضبط، تحويل، قص، عكس، تجميد،
+      //               استخراج الصوت، تكرار، استبدال، حذف، إلغاء
       _ToolDef(
         Icons.content_cut, S.split,
         enabled: state.canSplit,
@@ -315,6 +318,22 @@ class _ClipToolsBar extends StatelessWidget {
           clip.muted ? Icons.volume_off : Icons.volume_up, S.volume,
           onTap: () => showVolumeSheet(context, clip),
         ),
+      // الفلتر + الضبط في شريط المقطع (نمط CapCut — أهم أداة لما تحدد مقطع)
+      _ToolDef(
+        Icons.auto_awesome_outlined, S.filters,
+        active: clip.filterPreset != null,
+        onTap: () => showToolSheet(context, 6),
+      ),
+      _ToolDef(
+        Icons.tune, S.adjust,
+        active: !clip.adjust.isNeutral,
+        onTap: () => showToolSheet(context, 8),
+      ),
+      _ToolDef(
+        Icons.blur_on, S.effects,
+        active: clip.effects.isNotEmpty,
+        onTap: () => showToolSheet(context, 5),
+      ),
       _ToolDef(
         Icons.rotate_right, S.rotate90,
         onTap: () => state.updateClip(
@@ -348,12 +367,12 @@ class _ClipToolsBar extends StatelessWidget {
           onTap: () => _extract(context, state, clip),
         ),
       _ToolDef(
-        Icons.swap_horizontal_circle_outlined, 'استبدال',
-        onTap: () => _replace(context, state, clip),
-      ),
-      _ToolDef(
         Icons.copy_outlined, 'تكرار',
         onTap: () => state.duplicateClip(clip),
+      ),
+      _ToolDef(
+        Icons.swap_horizontal_circle_outlined, 'استبدال',
+        onTap: () => _replace(context, state, clip),
       ),
       _ToolDef(
         Icons.delete_outline, 'حذف',
@@ -371,9 +390,6 @@ class _ClipToolsBar extends StatelessWidget {
     ];
 
     return _SelectedToolsRow(
-      title: clip.title,
-      subtitle: '${S.durationLabel(clip.timelineDuration)}'
-          '${isPhoto ? '' : ' • ${S.speedLabel(clip.speed)}'}',
       tools: tools,
     );
   }
@@ -458,8 +474,6 @@ class _TextToolsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = EditorScope.of(context);
     return _SelectedToolsRow(
-      title: text.text.isEmpty ? 'نص' : text.text,
-      subtitle: S.durationLabel(text.end - text.start),
       tools: [
         _ToolDef(
           Icons.edit_outlined, S.edit,
@@ -497,8 +511,6 @@ class _TextToolsBar extends StatelessWidget {
   }
 }
 
-// ── أدوات الملصق المحدد ──
-
 class _StickerToolsBar extends StatelessWidget {
   final ImageOverlay sticker;
   const _StickerToolsBar({required this.sticker});
@@ -507,8 +519,6 @@ class _StickerToolsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = EditorScope.of(context);
     return _SelectedToolsRow(
-      title: sticker.emoji ?? 'ملصق',
-      subtitle: S.durationLabel(sticker.end - sticker.start),
       tools: [
         _ToolDef(
           Icons.videocam_outlined, S.keyframe,
@@ -562,83 +572,41 @@ class _ToolDef {
        this.active = false});
 }
 
-/// صف أدوات مع زر إلغاء التحديد + اسم العنصر (مثل CapCut عند تحديد مقطع).
+/// صف أدوات بنمط CapCut — الأدوات مباشرة، وزر إلغاء التحديد آخر أداة.
 class _SelectedToolsRow extends StatelessWidget {
-  final String title;
-  final String subtitle;
   final List<_ToolDef> tools;
 
   const _SelectedToolsRow({
-    required this.title,
-    required this.subtitle,
     required this.tools,
   });
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final dim = dark ? AppColors.darkTextDim : AppColors.lightTextDim;
-
     return SizedBox(
       height: 78,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // زر إلغاء التحديد
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              onPressed: () => EditorScope.of(context).clearSelection(),
-              icon: Icon(Icons.close, size: 22,
-                  color: dark ? AppColors.darkText : AppColors.lightText),
-            ),
-          ),
-          // اسم العنصر
-          Container(
-            width: 86,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            margin: const EdgeInsets.only(right: 2),
-            decoration: BoxDecoration(
-              color: dark ? AppColors.darkSurfaceHi : AppColors.lightSurfaceHi,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(title,
-                    style: AppFont.w(700, size: 10.5),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: AppFont.w(500, size: 9, color: dim),
-                    textDirection: TextDirection.ltr),
-              ],
-            ),
-          ),
-          // الأدوات
-          Expanded(
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                itemCount: tools.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 2),
-                itemBuilder: (ctx, i) {
-                  final t = tools[i];
-                  return _ToolCell(
-                    icon: t.icon,
-                    label: t.label,
-                    enabled: t.enabled,
-                    danger: t.danger,
-                    active: t.active,
-                    onTap: t.enabled ? t.onTap : () {},
-                  );
-                },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          children: [
+            for (final t in tools)
+              _ToolCell(
+                icon: t.icon,
+                label: t.label,
+                enabled: t.enabled,
+                danger: t.danger,
+                active: t.active,
+                onTap: t.enabled ? t.onTap : () {},
               ),
+            // إلغاء التحديد — آخر خلية (نمط CapCut)
+            _ToolCell(
+              icon: Icons.close,
+              label: 'إلغاء',
+              onTap: () => EditorScope.of(context).clearSelection(),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -689,10 +657,10 @@ class _ToolCell extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 21, color: color),
-              const SizedBox(height: 4),
+              Icon(icon, size: 23, color: color),
+              const SizedBox(height: 5),
               Text(label,
-                  style: AppFont.w(600, size: 9.5, color: color),
+                  style: AppFont.w(500, size: 10, color: color),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
             ],
@@ -712,15 +680,15 @@ Future<void> showToolSheet(BuildContext context, int index) async {
   String title;
   switch (index) {
     case 0: panel = const EditPanel(); title = S.tools; break;
-    case 1: panel = const FilterPanel(); title = S.filters; break;
-    case 2: panel = const EffectsPanel(); title = S.effects; break;
-    case 3: panel = const AudioPanel(); title = S.audio; break;
-    case 4: panel = const TextPanel(); title = S.text; break;
-    case 5: panel = const StickerPanel(); title = S.sticker; break;
-    case 6: panel = const _OverlayPanel(); title = S.overlay; break;
-    case 7: panel = const AdjustPanel(); title = S.adjust; break;
-    case 8: panel = const CanvasPanel(); title = S.canvas; break;
-    case 9: panel = const TransitionPanel(); title = S.transitions; break;
+    case 1: panel = const AudioPanel(); title = S.audio; break;
+    case 2: panel = const TextPanel(); title = S.text; break;
+    case 3: panel = const StickerPanel(); title = S.sticker; break;
+    case 4: panel = const _OverlayPanel(); title = S.overlay; break;
+    case 5: panel = const EffectsPanel(); title = S.effects; break;
+    case 6: panel = const FilterPanel(); title = S.filters; break;
+    case 7: panel = const TransitionPanel(); title = S.transitions; break;
+    case 8: panel = const AdjustPanel(); title = S.adjust; break;
+    case 9: panel = const CanvasPanel(); title = S.canvas; break;
     default: return;
   }
 

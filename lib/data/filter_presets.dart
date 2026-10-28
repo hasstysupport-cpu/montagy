@@ -1,80 +1,97 @@
 import 'models.dart';
 
-/// كتالوج الفلاتر — 44 فلتراً.
-/// الأسماء مستوحاة من كتالوج InShot الأصلي المستخرج من كود التطبيق
-/// (table_cinema01..05, table_film01..05, table_skin01..05, table_moss01..03, ...)
-/// مع إضافات بأسلوب CapCut.
+/// كتالوج الفلاتر — 42 فلتر LUT حقيقي (ملفات .cube مبنية في التطبيق).
+/// التصنيفات مستوحاة من كتالوج InShot الأصلي المستخرج من كود التطبيق
+/// (cinema01..05, film01..05, skin01..05, moss01..03, table_warm, table_lomo, ...)
+/// مع تنظيم بنمط CapCut + صور معاينة مُضمّنة.
 class FilterPreset {
   final String id;
   final String name;
-  final ColorParams params;
-  const FilterPreset(this.id, this.name, this.params);
+  final String category;
+  final String? thumbAsset; // صورة معاينة مُضمّنة (احتياطي لو مفيش ثامب للمقطع)
+  final ColorParams? params; // للاحتياطي فقط (فلاتر قديمة بارامترية)
+  const FilterPreset(this.id, this.name, this.category,
+      {this.thumbAsset, this.params});
+}
+
+class FilterCategories {
+  static const List<String> all = [
+    'شائع',
+    'سينما',
+    'فيلم',
+    'ريترو',
+    'أبيض وأسود',
+    'دافئ وبارد',
+    'طعام',
+    'طبيعة',
+    'بورتريه',
+    'أحلام',
+  ];
 }
 
 class FilterPresets {
   static const List<FilterPreset> all = [
-    // ── نظيف ──
-    FilterPreset('clean', 'نظيف', ColorParams(brightness: 0.10, contrast: 0.06, saturation: 0.06)),
-    FilterPreset('natural', 'طبيعي', ColorParams(brightness: 0.05, contrast: 0.03, saturation: -0.04)),
+    // ── شائع ──
+    FilterPreset('clear', 'واضح', 'شائع', thumbAsset: 'assets/filters/clear.png'),
+    FilterPreset('bright', 'مشرق', 'شائع', thumbAsset: 'assets/filters/bright.png'),
+    FilterPreset('soft', 'ناعم', 'شائع', thumbAsset: 'assets/filters/soft.png'),
+    FilterPreset('natural', 'طبيعي', 'شائع', thumbAsset: 'assets/filters/natural.png'),
+    FilterPreset('glow', 'توهج', 'شائع', thumbAsset: 'assets/filters/glow.png'),
 
-    // ── سينما (cinema01..05) ──
-    FilterPreset('cinema1', 'سينما ١', ColorParams(contrast: 0.16, saturation: -0.08, warmth: -0.06, vignette: 0.30)),
-    FilterPreset('cinema2', 'سينما ٢', ColorParams(contrast: 0.22, saturation: -0.14, warmth: 0.10, tint: -0.05, vignette: 0.38)),
-    FilterPreset('cinema3', 'سينما ٣', ColorParams(contrast: 0.14, saturation: -0.06, warmth: -0.14, vignette: 0.25)),
-    FilterPreset('cinema4', 'سينما ٤', ColorParams(contrast: 0.25, saturation: -0.18, warmth: 0.04, fade: 0.10, vignette: 0.45)),
-    FilterPreset('cinema5', 'سينما ٥', ColorParams(contrast: 0.18, saturation: -0.10, tint: 0.08, vignette: 0.42)),
+    // ── سينما ──
+    FilterPreset('cinema01', 'سينما ١', 'سينما', thumbAsset: 'assets/filters/cinema01.png'),
+    FilterPreset('cinema02', 'سينما ٢', 'سينما', thumbAsset: 'assets/filters/cinema02.png'),
+    FilterPreset('cinema03', 'سينما ٣', 'سينما', thumbAsset: 'assets/filters/cinema03.png'),
+    FilterPreset('cinema04', 'سينما ٤', 'سينما', thumbAsset: 'assets/filters/cinema04.png'),
+    FilterPreset('cinema05', 'سينما ٥', 'سينما', thumbAsset: 'assets/filters/cinema05.png'),
 
-    // ── فيلم (film01..05) ──
-    FilterPreset('film1', 'فيلم ١', ColorParams(brightness: 0.04, contrast: -0.06, saturation: -0.10, warmth: 0.16, fade: 0.22)),
-    FilterPreset('film2', 'فيلم ٢', ColorParams(contrast: -0.04, saturation: -0.16, warmth: 0.22, fade: 0.30)),
-    FilterPreset('film3', 'فيلم ٣', ColorParams(brightness: 0.06, contrast: -0.10, saturation: -0.22, warmth: 0.10, fade: 0.38)),
-    FilterPreset('film4', 'فيلم ٤', ColorParams(contrast: 0.06, saturation: -0.08, tint: -0.10, fade: 0.26)),
-    FilterPreset('film5', 'فيلم ٥', ColorParams(brightness: 0.03, contrast: 0.10, saturation: -0.12, warmth: -0.12, fade: 0.18)),
+    // ── فيلم ──
+    FilterPreset('film01', 'فيلم ١', 'فيلم', thumbAsset: 'assets/filters/film01.png'),
+    FilterPreset('film02', 'فيلم ٢', 'فيلم', thumbAsset: 'assets/filters/film02.png'),
+    FilterPreset('film03', 'فيلم ٣', 'فيلم', thumbAsset: 'assets/filters/film03.png'),
+    FilterPreset('film04', 'فيلم ٤', 'فيلم', thumbAsset: 'assets/filters/film04.png'),
+    FilterPreset('film05', 'فيلم ٥', 'فيلم', thumbAsset: 'assets/filters/film05.png'),
 
-    // ── بشرة (skin01..05) ──
-    FilterPreset('skin1', 'بشرة ١', ColorParams(brightness: 0.12, contrast: -0.06, saturation: 0.04, warmth: 0.10)),
-    FilterPreset('skin2', 'بشرة ٢', ColorParams(brightness: 0.15, contrast: -0.10, saturation: -0.04, warmth: 0.16)),
-    FilterPreset('skin3', 'بشرة ٣', ColorParams(brightness: 0.10, contrast: -0.04, saturation: 0.02, warmth: 0.06, tint: 0.05)),
-    FilterPreset('skin4', 'بشرة ٤', ColorParams(brightness: 0.18, contrast: -0.12, saturation: -0.08, warmth: 0.12, fade: 0.08)),
-    FilterPreset('skin5', 'بشرة ٥', ColorParams(brightness: 0.08, contrast: -0.02, saturation: 0.06, warmth: 0.20)),
-
-    // ── طحلب (moss01..03) ──
-    FilterPreset('moss1', 'طحلب ١', ColorParams(saturation: -0.06, tint: -0.18, contrast: 0.08)),
-    FilterPreset('moss2', 'طحلب ٢', ColorParams(saturation: -0.12, tint: -0.24, warmth: -0.08, fade: 0.12)),
-    FilterPreset('moss3', 'طحلب ٣', ColorParams(saturation: 0.02, tint: -0.20, warmth: 0.06, contrast: 0.10)),
-
-    // ── أجواء InShot الأصلية ──
-    FilterPreset('warm', 'دافئ', ColorParams(warmth: 0.30, brightness: 0.06, saturation: 0.08)),
-    FilterPreset('bright', 'ساطع', ColorParams(brightness: 0.22, contrast: 0.04, saturation: 0.05)),
-    FilterPreset('dark', 'داكن', ColorParams(brightness: -0.12, contrast: 0.14, saturation: -0.08, vignette: 0.30)),
-    FilterPreset('antique', 'عتيق', ColorParams(contrast: 0.08, saturation: -0.30, warmth: 0.20, fade: 0.30)),
-    FilterPreset('vintage', 'ريترو', ColorParams(saturation: -0.22, warmth: 0.14, tint: 0.06, fade: 0.34, contrast: 0.04)),
-    FilterPreset('pink', 'وردي', ColorParams(brightness: 0.08, saturation: 0.10, tint: 0.22, warmth: 0.08)),
-    FilterPreset('latte', 'لاتيه', ColorParams(brightness: 0.06, saturation: -0.10, warmth: 0.24, fade: 0.14)),
-    FilterPreset('cocoa', 'كاكاو', ColorParams(brightness: -0.02, saturation: -0.06, warmth: 0.28, contrast: 0.06, fade: 0.10)),
-    FilterPreset('gold', 'ذهبي', ColorParams(brightness: 0.08, saturation: 0.06, warmth: 0.36, contrast: 0.04)),
-    FilterPreset('grape', 'عنب', ColorParams(saturation: 0.08, tint: 0.14, warmth: -0.14, contrast: 0.10)),
-    FilterPreset('lomo', 'لومو', ColorParams(contrast: 0.28, saturation: 0.18, vignette: 0.55)),
-    FilterPreset('dew', 'ندى', ColorParams(brightness: 0.10, saturation: 0.04, warmth: -0.16, contrast: 0.02)),
-    FilterPreset('harvest', 'حصاد', ColorParams(saturation: 0.12, warmth: 0.22, contrast: 0.08, brightness: 0.02)),
-    FilterPreset('ginkgo', 'جنكو', ColorParams(saturation: 0.06, warmth: 0.18, tint: -0.10)),
-    FilterPreset('circus', 'سيرك', ColorParams(contrast: 0.20, saturation: 0.24, warmth: -0.06)),
-    FilterPreset('memo', 'مذكرة', ColorParams(contrast: -0.10, saturation: -0.36, fade: 0.42, brightness: 0.10)),
-    FilterPreset('story', 'حكاية', ColorParams(contrast: 0.10, saturation: -0.04, warmth: 0.08, fade: 0.16, vignette: 0.20)),
-    FilterPreset('time', 'زمن', ColorParams(contrast: 0.06, saturation: -0.40, warmth: 0.24, fade: 0.26)),
+    // ── ريترو ──
+    FilterPreset('lomo', 'لومو', 'ريترو', thumbAsset: 'assets/filters/lomo.png'),
+    FilterPreset('vintage', 'ريترو', 'ريترو', thumbAsset: 'assets/filters/vintage.png'),
+    FilterPreset('antique', 'عتيق', 'ريترو', thumbAsset: 'assets/filters/antique.png'),
+    FilterPreset('retro90', 'تسعينات', 'ريترو', thumbAsset: 'assets/filters/retro90.png'),
+    FilterPreset('faded', 'باهت', 'ريترو', thumbAsset: 'assets/filters/faded.png'),
 
     // ── أبيض وأسود ──
-    FilterPreset('mono', 'أبيض وأسود', ColorParams(monochrome: 1, contrast: 0.10)),
-    FilterPreset('noir', 'نوار', ColorParams(monochrome: 1, contrast: 0.34, vignette: 0.50, brightness: -0.04)),
-    FilterPreset('monoSoft', 'رمادي ناعم', ColorParams(monochrome: 1, contrast: -0.08, fade: 0.20, brightness: 0.08)),
+    FilterPreset('mono', 'أبيض وأسود', 'أبيض وأسود', thumbAsset: 'assets/filters/mono.png'),
+    FilterPreset('monoSoft', 'رمادي ناعم', 'أبيض وأسود', thumbAsset: 'assets/filters/monoSoft.png'),
+    FilterPreset('noir', 'نوار', 'أبيض وأسود', thumbAsset: 'assets/filters/noir.png'),
+    FilterPreset('silver', 'فضي', 'أبيض وأسود', thumbAsset: 'assets/filters/silver.png'),
+    FilterPreset('sepia', 'سيبيا', 'أبيض وأسود', thumbAsset: 'assets/filters/sepia.png'),
 
-    // ── إضافات CapCut-style ──
-    FilterPreset('peach', 'خوخي', ColorParams(brightness: 0.12, saturation: 0.06, tint: 0.16, warmth: 0.14)),
-    FilterPreset('sakura', 'ساكورا', ColorParams(brightness: 0.14, saturation: 0.10, tint: 0.28, contrast: -0.04)),
-    FilterPreset('food', 'طعام', ColorParams(saturation: 0.20, warmth: 0.16, contrast: 0.10)),
-    FilterPreset('cyberpunk', 'سيبربانك', ColorParams(contrast: 0.30, saturation: 0.30, tint: -0.18, warmth: -0.20, vignette: 0.35)),
-    FilterPreset('crisp', 'حاد', ColorParams(contrast: 0.18, saturation: 0.08, brightness: 0.04)),
-    FilterPreset('coolBlue', 'أزرق بارد', ColorParams(warmth: -0.30, saturation: 0.05, contrast: 0.06)),
+    // ── دافئ وبارد ──
+    FilterPreset('warm', 'دافئ', 'دافئ وبارد', thumbAsset: 'assets/filters/warm.png'),
+    FilterPreset('sunset', 'غروب', 'دافئ وبارد', thumbAsset: 'assets/filters/sunset.png'),
+    FilterPreset('golden', 'ذهبي', 'دافئ وبارد', thumbAsset: 'assets/filters/golden.png'),
+    FilterPreset('cool', 'بارد', 'دافئ وبارد', thumbAsset: 'assets/filters/cool.png'),
+    FilterPreset('ice', 'ثلجي', 'دافئ وبارد', thumbAsset: 'assets/filters/ice.png'),
+
+    // ── طعام ──
+    FilterPreset('foodWarm', 'طعام دافئ', 'طعام', thumbAsset: 'assets/filters/foodWarm.png'),
+    FilterPreset('fresh', 'منعش', 'طعام', thumbAsset: 'assets/filters/fresh.png'),
+
+    // ── طبيعة ──
+    FilterPreset('moss', 'طحلب', 'طبيعة', thumbAsset: 'assets/filters/moss.png'),
+    FilterPreset('forest', 'غابة', 'طبيعة', thumbAsset: 'assets/filters/forest.png'),
+    FilterPreset('sky', 'سماء', 'طبيعة', thumbAsset: 'assets/filters/sky.png'),
+    FilterPreset('harvest', 'حصاد', 'طبيعة', thumbAsset: 'assets/filters/harvest.png'),
+
+    // ── بورتريه ──
+    FilterPreset('skin01', 'بشرة ١', 'بورتريه', thumbAsset: 'assets/filters/skin01.png'),
+    FilterPreset('skin02', 'بشرة ٢', 'بورتريه', thumbAsset: 'assets/filters/skin02.png'),
+    FilterPreset('skin03', 'بشرة ٣', 'بورتريه', thumbAsset: 'assets/filters/skin03.png'),
+
+    // ── أحلام ──
+    FilterPreset('dreamy', 'حلمي', 'أحلام', thumbAsset: 'assets/filters/dreamy.png'),
+    FilterPreset('pastel', 'باستيل', 'أحلام', thumbAsset: 'assets/filters/pastel.png'),
+    FilterPreset('candy', 'حلوى', 'أحلام', thumbAsset: 'assets/filters/candy.png'),
   ];
 
   static FilterPreset? byId(String? id) {
@@ -84,6 +101,58 @@ class FilterPresets {
     }
     return null;
   }
+
+  /// خريطة الأسماء القديمة (مشاريع v2.x) إلى فلاتر الـ LUT الجديدة.
+  static const Map<String, String> _legacyMap = {
+    'clean': 'clear',
+    'cinema1': 'cinema01',
+    'cinema2': 'cinema02',
+    'cinema3': 'cinema03',
+    'cinema4': 'cinema04',
+    'cinema5': 'cinema05',
+    'film1': 'film01',
+    'film2': 'film02',
+    'film3': 'film03',
+    'film4': 'film04',
+    'film5': 'film05',
+    'skin1': 'skin01',
+    'skin2': 'skin02',
+    'skin3': 'skin03',
+    'skin4': 'skin02',
+    'skin5': 'skin01',
+    'moss1': 'moss',
+    'moss2': 'forest',
+    'moss3': 'moss',
+    'dark': 'cinema04',
+    'pink': 'candy',
+    'latte': 'golden',
+    'cocoa': 'film04',
+    'gold': 'golden',
+    'grape': 'cool',
+    'dew': 'fresh',
+    'ginkgo': 'harvest',
+    'circus': 'candy',
+    'memo': 'faded',
+    'story': 'film03',
+    'time': 'sepia',
+    'peach': 'skin02',
+    'sakura': 'pastel',
+    'food': 'foodWarm',
+    'cyberpunk': 'cinema01',
+    'crisp': 'clear',
+    'coolBlue': 'cool',
+  };
+
+  /// يحول أي معرّف (قديم أو جديد) إلى معرّف LUT حقيقي.
+  static String? resolveId(String? id) {
+    if (id == null) return null;
+    if (byId(id) != null) return id;
+    final mapped = _legacyMap[id];
+    return (mapped != null && byId(mapped) != null) ? mapped : null;
+  }
+
+  static List<FilterPreset> byCategory(String cat) =>
+      all.where((f) => f.category == cat).toList();
 }
 
 /// كتالوج الانتقالات (xfade).

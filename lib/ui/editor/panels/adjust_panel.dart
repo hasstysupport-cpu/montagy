@@ -6,7 +6,8 @@ import '../../../data/models.dart';
 import '../../widgets/common.dart';
 import '../editor_screen.dart';
 
-/// لوحة التعديل اللوني — سطوع/تباين/تشبع/دفء/صبغة/تلاشي/تظليل.
+/// لوحة التعديل اللوني — 12 بارامتر بنمط CapCut:
+/// سطوع، تباين، تشبع، إضاءة، حدة، إبرازات، ظلال، حرارة، تدرج، هوى، تلاشي، تظليل.
 class AdjustPanel extends StatelessWidget {
   const AdjustPanel();
 
@@ -19,6 +20,9 @@ class AdjustPanel extends StatelessWidget {
     }
     final a = clip.adjust;
 
+    String pm(double v) =>
+        v >= 0 ? '+${v.toStringAsFixed(2)}' : v.toStringAsFixed(2);
+
     return PanelScroll(
       child: Column(
         children: [
@@ -27,7 +31,7 @@ class AdjustPanel extends StatelessWidget {
             value: a.brightness,
             min: -1,
             max: 1,
-            display: (v) => v.toStringAsFixed(2),
+            display: pm,
             onChanged: (v) => state.updateClip(
                 clip.copyWith(adjust: a.copyWith(brightness: v))),
           ),
@@ -36,7 +40,7 @@ class AdjustPanel extends StatelessWidget {
             value: a.contrast,
             min: -1,
             max: 1,
-            display: (v) => v.toStringAsFixed(2),
+            display: pm,
             onChanged: (v) => state.updateClip(
                 clip.copyWith(adjust: a.copyWith(contrast: v))),
           ),
@@ -45,16 +49,43 @@ class AdjustPanel extends StatelessWidget {
             value: a.saturation,
             min: -1,
             max: 1,
-            display: (v) => v.toStringAsFixed(2),
+            display: pm,
             onChanged: (v) => state.updateClip(
                 clip.copyWith(adjust: a.copyWith(saturation: v))),
+          ),
+          LabeledSlider(
+            label: 'الحدة',
+            value: a.sharpen,
+            min: 0,
+            max: 1,
+            display: (v) => '${(v * 100).round()}',
+            onChanged: (v) => state.updateClip(
+                clip.copyWith(adjust: a.copyWith(sharpen: v))),
+          ),
+          LabeledSlider(
+            label: 'إبرازات',
+            value: a.highlights,
+            min: -1,
+            max: 1,
+            display: pm,
+            onChanged: (v) => state.updateClip(
+                clip.copyWith(adjust: a.copyWith(highlights: v))),
+          ),
+          LabeledSlider(
+            label: 'الظلال',
+            value: a.shadows,
+            min: -1,
+            max: 1,
+            display: pm,
+            onChanged: (v) => state.updateClip(
+                clip.copyWith(adjust: a.copyWith(shadows: v))),
           ),
           LabeledSlider(
             label: S.warmth,
             value: a.warmth,
             min: -1,
             max: 1,
-            display: (v) => v >= 0 ? '+${v.toStringAsFixed(2)}' : v.toStringAsFixed(2),
+            display: pm,
             onChanged: (v) => state.updateClip(
                 clip.copyWith(adjust: a.copyWith(warmth: v))),
           ),
@@ -63,16 +94,25 @@ class AdjustPanel extends StatelessWidget {
             value: a.tint,
             min: -1,
             max: 1,
-            display: (v) => v >= 0 ? '+${v.toStringAsFixed(2)}' : v.toStringAsFixed(2),
+            display: pm,
             onChanged: (v) => state.updateClip(
                 clip.copyWith(adjust: a.copyWith(tint: v))),
+          ),
+          LabeledSlider(
+            label: 'الهوى',
+            value: a.hue,
+            min: -1,
+            max: 1,
+            display: (v) => '${(v * 180).round()}°',
+            onChanged: (v) => state.updateClip(
+                clip.copyWith(adjust: a.copyWith(hue: v))),
           ),
           LabeledSlider(
             label: S.fade,
             value: a.fade,
             min: 0,
             max: 1,
-            display: (v) => v.toStringAsFixed(2),
+            display: (v) => (v * 100).round().toString(),
             onChanged: (v) => state.updateClip(
                 clip.copyWith(adjust: a.copyWith(fade: v))),
           ),
@@ -81,7 +121,7 @@ class AdjustPanel extends StatelessWidget {
             value: a.vignette,
             min: 0,
             max: 1,
-            display: (v) => v.toStringAsFixed(2),
+            display: (v) => (v * 100).round().toString(),
             onChanged: (v) => state.updateClip(
                 clip.copyWith(adjust: a.copyWith(vignette: v))),
           ),
@@ -105,8 +145,7 @@ class AdjustPanel extends StatelessWidget {
                   label: AppFont.w(600, size: 12.5).make(S.applyToAll),
                   onPressed: () {
                     for (final c in state.project.clips) {
-                      state.updateClip(
-                          c.copyWith(adjust: a));
+                      state.updateClip(c.copyWith(adjust: a));
                     }
                   },
                 ),

@@ -1,7 +1,7 @@
 name: montagy
 description: "Montagy — مونتاجي: استوديو مونتاج فيديو احترافي (قوة CapCut وبساطة InShot في تطبيق واحد)."
 publish_to: "none"
-version: 2.2.0+10
+version: 3.0.0+11
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -41,6 +41,8 @@ flutter:
 
   assets:
     - assets/fonts/
+    - assets/luts/
+    - assets/filters/
 
   fonts:
     # ── خط الواجهة الرئيسي (عربي + لاتيني، عصري فخم) ──
@@ -79,10 +81,15 @@ flutter:
     - family: IBMPlexSansArabic
       fonts:
         - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
+        - asset: assets/fonts/IBMPlexSansArabic-Medium.ttf
+          weight: 500
         - asset: assets/fonts/IBMPlexSansArabic-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
           weight: 700
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo.ttf
     - family: Rubik
       fonts:
         - asset: assets/fonts/Rubik.ttf
